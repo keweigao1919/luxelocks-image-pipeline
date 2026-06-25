@@ -209,6 +209,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 | 日期 | AI | 改动内容 |
 |------|-----|---------|
+| 2026-06-25 | Codex | 补全 TikTok Wig Ops 页面 hover 指导信息：templates/tiktok.html 为标题、统计卡、表头、数据行、脚本工厂、排期、视频复盘和弹窗字段增加 title，说明数据来源/计算逻辑/操作方法 |
 | 2026-06-25 | Codex | 新增 TikTok Wig Ops 中控模块：app.py 添加 tiktok_skus/tiktok_videos 表、利润/补货计算、脚本生成、7天排期、视频复盘API；templates/base.html 增加入口；新增 templates/tiktok.html 页面 |
 | 2026-06-25 | Codex | 补齐三方入口文档：memory/MEMORY.md 与 .cursorrules 均要求先读 WORKING.md + CLAUDE.md，避免 Claude/Claude Code/Codex 漏看实时看板 |
 | 2026-06-25 | Claude Code | 三方协作基建: 创建 WORKING.md 活动看板, 更新 CLAUDE.md 协作规则支持 Claude+Codex+ClaudeCode 三方, 更新 AGENTS.md 指向 WORKING.md, git init 就绪 |

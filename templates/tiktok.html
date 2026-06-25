@@ -36,15 +36,18 @@
 .tt-compact-btn.danger { color:#e53935; border-color:#fce4ec; }
 .tt-textarea-output { min-height:78px; font-size:12px; line-height:1.45; }
 .tt-schedule-box { max-height:360px; overflow:auto; border:1px solid #eee; border-radius:6px; }
+#ttOps [title] { cursor: help; }
+#ttOps button[title], #ttOps input[type="checkbox"][title] { cursor: pointer; }
 @media (max-width: 1100px) {
     .tt-grid { grid-template-columns:1fr; }
 }
 </style>
 
+<div id="ttOps">
 <div class="tt-header">
     <div>
-        <h2>🎥 TikTok Wig Ops</h2>
-        <div class="tt-sub">SKU、排期、脚本、利润、复盘</div>
+        <h2 title="模块用途：TikTok假发店铺运营中控。数据来源：本页手动录入并保存到本地SQLite的 tiktok_skus 和 tiktok_videos 表。核心逻辑：先管理SKU利润/库存，再生成排期和脚本，最后录入视频数据做复盘。">🎥 TikTok Wig Ops</h2>
+        <div class="tt-sub" title="运营闭环：SKU管理 → 视频排期 → 脚本生成 → 发布后填播放/点击/成交 → 系统给诊断和复拍动作。">SKU、排期、脚本、利润、复盘</div>
     </div>
     <div class="tt-actions">
         <button class="btn btn-primary" onclick="showSkuModal()" title="新增TikTok主推或测试SKU，填写价格、成本、库存和退货参数">＋ SKU</button>
@@ -53,16 +56,16 @@
 </div>
 
 <div class="stats col4">
-    <div class="stat-card"><div class="label">SKU</div><div class="value">{{ stats.total_skus }}</div></div>
-    <div class="stat-card"><div class="label">可主推</div><div class="value" style="color:#27ae60">{{ stats.main_push }}</div></div>
-    <div class="stat-card"><div class="label">高风险</div><div class="value" style="color:#e53935">{{ stats.high_risk }}</div></div>
-    <div class="stat-card"><div class="label">待发布</div><div class="value" style="color:#3498db">{{ stats.upcoming }}</div></div>
+    <div class="stat-card" title="数据来源：tiktok_skus 表。含义：当前已录入的TikTok运营SKU总数。操作：点击右上角 + SKU 新增测试款、主推款、补货款或清库存款。"><div class="label">SKU</div><div class="value">{{ stats.total_skus }}</div></div>
+    <div class="stat-card" title="计算逻辑：净利润 >= 6美元的SKU计为可主推。净利润 = 售价 - 产品成本 - 尾程 - 平台费 - 广告费 - 退款损失×退货率。"><div class="label">可主推</div><div class="value" style="color:#27ae60">{{ stats.main_push }}</div></div>
+    <div class="stat-card" title="计算逻辑：净利润 < 3美元的SKU计为高风险。用途：提醒不要轻易加大投放或大批量补货。"><div class="label">高风险</div><div class="value" style="color:#e53935">{{ stats.high_risk }}</div></div>
+    <div class="stat-card" title="数据来源：tiktok_videos 表。计算逻辑：posted=0 且发布日期大于等于今天的记录数。用途：查看还有多少排期视频没发布。"><div class="label">待发布</div><div class="value" style="color:#3498db">{{ stats.upcoming }}</div></div>
 </div>
 
 <div class="tt-grid">
     <div class="tt-card">
         <div class="tt-card-header">
-            <span>SKU利润 / 补货</span>
+            <span title="数据来源：tiktok_skus 表。用途：用售价、成本、平台费、广告费、退货率和库存判断SKU是主推、测试、补货、清库存还是暂停。">SKU利润 / 补货</span>
             <button class="btn btn-sm btn-primary" onclick="showSkuModal()" title="新增SKU到TikTok运营中控表">＋ 新增</button>
         </div>
         <div class="tt-card-body" style="padding:0">
@@ -71,26 +74,36 @@
                 <table class="tt-table">
                     <thead>
                     <tr>
-                        <th>选择</th><th>SKU</th><th>产品</th><th>售价</th><th>成本</th><th>净利</th><th>利润率</th><th>库存</th><th>售完</th><th>状态</th><th>操作</th>
+                        <th title="操作方法：勾选后该SKU会参与下方排期生成；取消勾选则本次排期不使用。">选择</th>
+                        <th title="数据来源：SKU弹窗录入。建议填写TikTok店铺SKU或简化SKU，方便和素材、采购、库存对应。">SKU</th>
+                        <th title="数据来源：SKU弹窗的产品名、颜色、长度。用途：帮助脚本生成器写出更贴近款式的口播。">产品</th>
+                        <th title="数据来源：SKU弹窗售价。默认可填23.99，用于利润、保本价和建议价计算。">售价</th>
+                        <th title="计算逻辑：产品成本 + 尾程配送费。这里不含平台费、广告费和退货损失。">成本</th>
+                        <th title="计算逻辑：售价 - 产品成本 - 尾程 - 售价×平台费率 - 广告费 - 退款损失×退货率。低于3美元为高风险，高于等于6美元为可主推。">净利</th>
+                        <th title="计算逻辑：净利 / 售价 × 100%。用于判断该SKU是否有足够利润承受退货和广告波动。">利润率</th>
+                        <th title="数据来源：SKU弹窗手动录入当前可售库存。后续可接TikTok或仓库库存。">库存</th>
+                        <th title="计算逻辑：库存 / 日均销量 = 预计可卖天数；如果可卖天数小于补货LT或低于安全库存，会提示需补货。">售完</th>
+                        <th title="状态来源：手动状态 + 利润判断。主推/测试/补货/清库存/暂停用于排期和运营决策。">状态</th>
+                        <th title="操作方法：编辑修改SKU参数；脚本会把该SKU送入脚本工厂；删除会移除该SKU运营记录。">操作</th>
                     </tr>
                     </thead>
                     <tbody>
                     {% for s in skus %}
                     <tr>
                         <td><input type="checkbox" class="schedule-sku" value="{{ s.sku }}" checked title="勾选后参与视频排期生成"></td>
-                        <td><strong style="color:#e94560">{{ s.sku }}</strong><div class="tt-muted">{{ s.color or '-' }} {{ s.length or '' }}</div></td>
-                        <td>{{ s.product_name or '-' }}</td>
-                        <td>${{ '%.2f'|format(s.price or 0) }}</td>
-                        <td>${{ '%.2f'|format((s.product_cost or 0) + (s.shipping_fee or 0)) }}</td>
-                        <td style="font-weight:700; color:{% if s.net_profit < 3 %}#e53935{% elif s.net_profit >= 6 %}#27ae60{% else %}#e67e22{% endif %}">${{ '%.2f'|format(s.net_profit) }}</td>
-                        <td>{{ s.profit_rate }}%</td>
-                        <td>{{ s.stock or 0 }}</td>
-                        <td>{% if s.days_left is not none %}{{ s.days_left }}天{% else %}-{% endif %}<div class="tt-muted">{{ s.stock_status }}</div></td>
+                        <td title="SKU：{{ s.sku }}。颜色/长度：{{ s.color or '-' }} {{ s.length or '' }}。用途：排期、脚本和复盘都会用这个SKU串联。"><strong style="color:#e94560">{{ s.sku }}</strong><div class="tt-muted">{{ s.color or '-' }} {{ s.length or '' }}</div></td>
+                        <td title="产品名：{{ s.product_name or '-' }}。建议写成运营能看懂的款式名，例如 24 inch brown highlight wig。">{{ s.product_name or '-' }}</td>
+                        <td title="售价来源：SKU弹窗 price 字段。用于利润和脚本价格话术。">${{ '%.2f'|format(s.price or 0) }}</td>
+                        <td title="成本逻辑：产品成本 {{ '%.2f'|format(s.product_cost or 0) }} + 尾程 {{ '%.2f'|format(s.shipping_fee or 0) }} = {{ '%.2f'|format((s.product_cost or 0) + (s.shipping_fee or 0)) }}。">${{ '%.2f'|format((s.product_cost or 0) + (s.shipping_fee or 0)) }}</td>
+                        <td title="净利逻辑：售价 - 产品成本 - 尾程 - 平台费 - 广告费 - 退款损失×退货率。当前净利 {{ '%.2f'|format(s.net_profit) }}，标签为 {{ s.profit_label }}。" style="font-weight:700; color:{% if s.net_profit < 3 %}#e53935{% elif s.net_profit >= 6 %}#27ae60{% else %}#e67e22{% endif %}">${{ '%.2f'|format(s.net_profit) }}</td>
+                        <td title="利润率逻辑：净利 / 售价 × 100%。当前 {{ s.profit_rate }}%。利润率低说明退货、广告或平台费会更容易吃掉利润。">{{ s.profit_rate }}%</td>
+                        <td title="库存来源：手动录入当前可售库存。当前 {{ s.stock or 0 }} 件。">{{ s.stock or 0 }}</td>
+                        <td title="补货逻辑：库存 / 日均销量 = 预计售完天数；再和补货LT、 安全库存比较。当前状态：{{ s.stock_status }}。">{% if s.days_left is not none %}{{ s.days_left }}天{% else %}-{% endif %}<div class="tt-muted">{{ s.stock_status }}</div></td>
                         <td>
-                            {% if s.status == 'main' %}<span class="tt-pill tt-pill-main">主推</span>
-                            {% elif s.status == 'paused' %}<span class="tt-pill tt-pill-pause">暂停</span>
-                            {% elif s.profit_label == '高风险' %}<span class="tt-pill tt-pill-risk">高风险</span>
-                            {% else %}<span class="tt-pill tt-pill-test">{{ s.profit_label }}</span>{% endif %}
+                            {% if s.status == 'main' %}<span class="tt-pill tt-pill-main" title="状态来源：SKU手动标记为主推。建议：优先进入排期和复拍池，同时关注库存是否跟得上。">主推</span>
+                            {% elif s.status == 'paused' %}<span class="tt-pill tt-pill-pause" title="状态来源：SKU手动标记为暂停。排期生成默认会跳过 paused SKU。">暂停</span>
+                            {% elif s.profit_label == '高风险' %}<span class="tt-pill tt-pill-risk" title="判断逻辑：净利润低于3美元。建议：先复核成本、退货率、广告费或提高售价，不建议大力投放。">高风险</span>
+                            {% else %}<span class="tt-pill tt-pill-test" title="判断逻辑：净利润介于3到6美元为可测试；高于等于6美元为可主推。">{{ s.profit_label }}</span>{% endif %}
                         </td>
                         <td style="white-space:nowrap">
                             <button class="tt-compact-btn" onclick="editSkuByIdx({{ loop.index0 }})" title="编辑该SKU的价格、成本、退货率、库存和状态">编辑</button>
@@ -103,34 +116,34 @@
                 </table>
             </div>
             {% else %}
-            <div class="empty">暂无TikTok SKU</div>
+            <div class="empty" title="这里会显示已保存的TikTok SKU。操作方法：点击右上角 + SKU，先录入5个主推款或测试款。">暂无TikTok SKU</div>
             {% endif %}
         </div>
     </div>
 
     <div class="tt-card">
-        <div class="tt-card-header">脚本工厂</div>
+        <div class="tt-card-header" title="用途：把SKU资料和卖点角度转换成TikTok视频口播、展示顺序、封面文案、发布文案和标签。数据来源：tiktok_skus 表。">脚本工厂</div>
         <div class="tt-card-body">
             <div class="tt-field" style="margin-bottom:10px">
-                <label>SKU</label>
-                <select id="scriptSku">
+                <label title="操作方法：选择要生成脚本的SKU。脚本会读取该SKU的颜色、长度、价格和产品名。">SKU</label>
+                <select id="scriptSku" title="数据来源：tiktok_skus 表。选择后，生成脚本会自动带入产品名、颜色、长度和售价。">
                     {% for s in skus %}<option value="{{ s.sku }}">{{ s.sku }} - {{ s.color or s.product_name or '' }}</option>{% endfor %}
                 </select>
             </div>
             <div class="tt-field" style="margin-bottom:10px">
-                <label>卖点角度</label>
-                <select id="scriptAngle">
+                <label title="逻辑来源：内置卖点池。不同角度会影响开头钩子、展示顺序和文案重点。">卖点角度</label>
+                <select id="scriptAngle" title="选择视频主卖点：整体效果/发顶自然/颜色自然光/背面发量/新手友好等。">
                     {% for a in angle_pool %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
                 </select>
             </div>
             <button class="btn btn-primary" onclick="generateScript()" title="按SKU和卖点角度生成口播、展示顺序、封面、文案和标签">生成脚本</button>
             <div class="tt-field" style="margin-top:12px">
-                <label>口播</label>
-                <textarea id="scriptVoiceover" class="tt-textarea-output" readonly></textarea>
+                <label title="输出逻辑：根据SKU资料和卖点角度生成15秒左右口播，并附带8秒短版。可直接给剪映/CapCut做字幕或口播。">口播</label>
+                <textarea id="scriptVoiceover" class="tt-textarea-output" readonly title="生成结果区域：包含较完整口播和8秒短口播。操作：点击下方复制按钮复制全部脚本。"></textarea>
             </div>
             <div class="tt-field" style="margin-top:10px">
-                <label>封面 / 发布文案</label>
-                <textarea id="scriptCaption" class="tt-textarea-output" readonly></textarea>
+                <label title="输出逻辑：把卖点压缩成封面字、发布文案、标签和置顶评论，方便你发布时直接使用。">封面 / 发布文案</label>
+                <textarea id="scriptCaption" class="tt-textarea-output" readonly title="生成结果区域：包含封面文案、发布文案、标签和置顶评论。"></textarea>
             </div>
             <button class="btn btn-sm" style="background:#eee;margin-top:8px" onclick="copyScript()" title="复制当前生成的口播和发布文案">复制</button>
         </div>
@@ -138,7 +151,7 @@
 
     <div class="tt-card tt-grid-full">
         <div class="tt-card-header">
-            <span>7天视频排期</span>
+            <span title="用途：用账号、SKU和卖点池自动生成多账号发布计划。规则：同一账号不连续两天发同一SKU，同一SKU每天最多出现指定次数。">7天视频排期</span>
             <div class="tt-actions">
                 <button class="btn btn-sm btn-primary" onclick="generateSchedule(false)" title="按勾选SKU、账号和日期生成视频排期预览">生成预览</button>
                 <button class="btn btn-sm btn-green" onclick="generateSchedule(true)" title="生成排期并保存到视频复盘表，作为待发布视频">生成并保存</button>
@@ -147,29 +160,29 @@
         <div class="tt-card-body">
             <div class="tt-form-grid">
                 <div class="tt-field tt-field-full">
-                    <label>账号</label>
+                    <label title="数据来源：手动输入。操作方法：用逗号分隔多个账号；每个账号每天会生成1条视频。">账号</label>
                     <input id="scheduleAccounts" value="{{ default_accounts }}" title="用逗号分隔账号，例如 official, channel01, channel02">
                 </div>
                 <div class="tt-field">
-                    <label>开始日期</label>
+                    <label title="排期逻辑：从该日期开始，连续生成指定天数的视频计划。">开始日期</label>
                     <input id="scheduleStart" type="date" value="{{ today }}" title="排期从该日期开始生成">
                 </div>
                 <div class="tt-field">
-                    <label>天数</label>
+                    <label title="操作方法：输入1-30之间的天数。默认7天，适合每周内容排期。">天数</label>
                     <input id="scheduleDays" type="number" value="7" min="1" max="30" title="生成多少天的视频排期">
                 </div>
                 <div class="tt-field">
-                    <label>单SKU每日最多账号数</label>
+                    <label title="防重复逻辑：限制同一个SKU同一天最多被几个账号发布，避免矩阵号一天内过度重复。">单SKU每日最多账号数</label>
                     <input id="scheduleMaxPerSku" type="number" value="3" min="1" max="10" title="限制同一个SKU同一天最多出现几次">
                 </div>
             </div>
-            <div id="scheduleResult" class="tt-schedule-box" style="margin-top:12px;display:none"></div>
+            <div id="scheduleResult" class="tt-schedule-box" style="margin-top:12px;display:none" title="排期预览区域：生成后显示日期、账号、SKU、卖点角度、展示顺序、封面和发布文案。若点击生成并保存，会写入 tiktok_videos 表作为待发布视频。"></div>
         </div>
     </div>
 
     <div class="tt-card tt-grid-full">
         <div class="tt-card-header">
-            <span>视频复盘</span>
+            <span title="数据来源：tiktok_videos 表。用途：录入每条视频的播放、商品点击、成交和GMV，系统自动判断该视频该复拍、优化封面还是检查详情页。">视频复盘</span>
             <button class="btn btn-sm btn-green" onclick="showVideoModal()" title="新增视频计划或填入播放、点击、成交数据">＋ 新增视频</button>
         </div>
         <div class="tt-card-body" style="padding:0">
@@ -178,22 +191,32 @@
                 <table class="tt-table">
                     <thead>
                     <tr>
-                        <th>日期</th><th>账号</th><th>SKU</th><th>角度</th><th>播放</th><th>点击</th><th>成交</th><th>CTR</th><th>诊断</th><th>复拍动作</th><th>操作</th>
+                        <th title="数据来源：视频弹窗 publish_date 字段。待发布视频由排期保存产生，已发布视频可继续填数据复盘。">日期</th>
+                        <th title="数据来源：视频弹窗账号字段。用于判断不同账号是否适合不同SKU或卖点。">账号</th>
+                        <th title="数据来源：视频关联SKU。用于把内容表现和SKU利润/库存连接起来。">SKU</th>
+                        <th title="数据来源：视频卖点角度。用于判断颜色、发顶、背面、新手友好等哪个卖点更有效。">角度</th>
+                        <th title="数据来源：TikTok后台手动填入播放量。用于判断流量大小。">播放</th>
+                        <th title="数据来源：TikTok商品点击数据。用于计算CTR=点击/播放。">点击</th>
+                        <th title="数据来源：TikTok成交数据。用于判断转化能力。">成交</th>
+                        <th title="计算逻辑：商品点击 / 播放 × 100%。播放高但CTR低，通常要重做封面和前3秒卖点。">CTR</th>
+                        <th title="系统逻辑：根据播放、点击、成交自动诊断，例如播放高点击低、点击高成交低、小流量高转化、可复拍模板。">诊断</th>
+                        <th title="系统建议：根据诊断给下一步动作，例如换账号复拍、重做封面、检查价格详情页、补拍自然光颜色。">复拍动作</th>
+                        <th title="操作方法：编辑可补数据或改脚本；删除会移除该视频记录。">操作</th>
                     </tr>
                     </thead>
                     <tbody>
                     {% for v in videos %}
                     <tr>
-                        <td>{{ v.publish_date or '-' }}{% if not v.posted %}<div class="tt-muted">待发布</div>{% endif %}</td>
-                        <td>{{ v.account_name or '-' }}</td>
-                        <td><strong>{{ v.sku }}</strong></td>
-                        <td>{{ v.video_angle or '-' }}</td>
-                        <td>{{ v.views or 0 }}</td>
-                        <td>{{ v.product_clicks or 0 }}</td>
-                        <td>{{ v.orders or 0 }}</td>
-                        <td>{{ v.ctr }}%</td>
-                        <td>{{ v.diagnosis or '-' }}</td>
-                        <td>{{ v.repeat_action or '-' }}</td>
+                        <td title="发布日期：{{ v.publish_date or '-' }}。状态：{% if v.posted %}已发布{% else %}待发布{% endif %}。">{{ v.publish_date or '-' }}{% if not v.posted %}<div class="tt-muted">待发布</div>{% endif %}</td>
+                        <td title="发布账号：{{ v.account_name or '-' }}。复盘时可以比较不同账号对同一SKU/卖点的表现。">{{ v.account_name or '-' }}</td>
+                        <td title="关联SKU：{{ v.sku }}。用于把视频表现和利润、库存、补货判断连接起来。"><strong>{{ v.sku }}</strong></td>
+                        <td title="视频主卖点角度：{{ v.video_angle or '-' }}。用于后续判断哪些卖点值得复拍。">{{ v.video_angle or '-' }}</td>
+                        <td title="播放量：{{ v.views or 0 }}。播放低不一定差，若成交高可能是小流量高转化，值得换账号复拍。">{{ v.views or 0 }}</td>
+                        <td title="商品点击：{{ v.product_clicks or 0 }}。用于计算CTR。点击高成交低时，要检查价格、详情页、评价和评论信任。">{{ v.product_clicks or 0 }}</td>
+                        <td title="成交订单：{{ v.orders or 0 }}。用于判断转化。成交高的视频结构优先复拍。">{{ v.orders or 0 }}</td>
+                        <td title="CTR逻辑：商品点击 / 播放 × 100%。当前 {{ v.ctr }}%。">{{ v.ctr }}%</td>
+                        <td title="自动诊断：{{ v.diagnosis or '-' }}。留空保存视频时，系统会按播放/点击/成交自动生成。">{{ v.diagnosis or '-' }}</td>
+                        <td title="复拍建议：{{ v.repeat_action or '-' }}。用于决定下一条是复拍同结构、换账号、改封面、还是检查商品页。">{{ v.repeat_action or '-' }}</td>
                         <td style="white-space:nowrap">
                             <button class="tt-compact-btn" onclick="editVideoByIdx({{ loop.index0 }})" title="编辑该视频计划或复盘数据">编辑</button>
                             <button class="tt-compact-btn danger" onclick="deleteVideoByIdx({{ loop.index0 }})" title="删除该视频记录">删</button>
@@ -204,7 +227,7 @@
                 </table>
             </div>
             {% else %}
-            <div class="empty">暂无视频记录</div>
+            <div class="empty" title="这里会显示视频计划和复盘记录。操作方法：可以点击 生成并保存 自动创建待发布视频，也可以点击 + 新增视频 手动录入。">暂无视频记录</div>
             {% endif %}
         </div>
     </div>
@@ -212,26 +235,26 @@
 
 <div class="tt-modal-overlay" id="skuModal" onclick="if(event.target===this)closeSkuModal()">
     <div class="tt-modal">
-        <h3 id="skuModalTitle">新增SKU</h3>
+        <h3 id="skuModalTitle" title="用途：新增或编辑TikTok运营SKU。保存后进入 tiktok_skus 表，用于利润、补货、脚本和排期。">新增SKU</h3>
         <input type="hidden" id="skuId">
         <div class="tt-form-grid">
-            <div class="tt-field"><label>SKU</label><input id="skuCode" title="TikTok运营SKU或简化SKU"></div>
-            <div class="tt-field"><label>状态</label><select id="skuStatus" title="SKU当前运营状态"><option value="testing">测试</option><option value="main">主推</option><option value="restock">补货</option><option value="clear">清库存</option><option value="paused">暂停</option></select></div>
-            <div class="tt-field tt-field-full"><label>产品名</label><input id="skuName" title="TikTok展示用产品名"></div>
-            <div class="tt-field"><label>颜色</label><input id="skuColor" title="产品颜色，例如 brown highlight"></div>
-            <div class="tt-field"><label>长度</label><input id="skuLength" title="产品长度，例如 24 inch"></div>
-            <div class="tt-field"><label>售价($)</label><input id="skuPrice" type="number" step="0.01" value="23.99" title="TikTok Shop售价"></div>
-            <div class="tt-field"><label>产品成本($)</label><input id="skuCost" type="number" step="0.01" title="单件采购或入仓成本"></div>
-            <div class="tt-field"><label>尾程($)</label><input id="skuShipping" type="number" step="0.01" title="单件配送或尾程成本"></div>
-            <div class="tt-field"><label>平台费率</label><input id="skuFeeRate" type="number" step="0.01" value="0.06" title="平台费率，例如0.06"></div>
-            <div class="tt-field"><label>广告费($)</label><input id="skuAdCost" type="number" step="0.01" title="单件预估广告成本"></div>
-            <div class="tt-field"><label>退货率</label><input id="skuReturnRate" type="number" step="0.01" value="0.20" title="预估退货率，例如0.20"></div>
-            <div class="tt-field"><label>退款损失($)</label><input id="skuRefundLoss" type="number" step="0.01" title="每次退货造成的平均损失，留空则按成本+尾程估算"></div>
-            <div class="tt-field"><label>库存</label><input id="skuStock" type="number" title="当前可售库存"></div>
-            <div class="tt-field"><label>日均销量</label><input id="skuDailySales" type="number" step="0.1" title="最近稳定日均销量"></div>
-            <div class="tt-field"><label>补货LT(天)</label><input id="skuLeadTime" type="number" value="30" title="采购、运输、入仓总周期天数"></div>
-            <div class="tt-field"><label>安全库存</label><input id="skuSafetyStock" type="number" value="10" title="低于该库存时提示风险"></div>
-            <div class="tt-field tt-field-full"><label>备注</label><textarea id="skuNotes" title="记录款式判断、供应链或内容备注"></textarea></div>
+            <div class="tt-field"><label title="必填。建议用TikTok SKU或简化SKU，后续视频、脚本、排期都会通过它关联。">SKU</label><input id="skuCode" title="TikTok运营SKU或简化SKU。例如 1261-4 或 SWLC1261-4BR24。"></div>
+            <div class="tt-field"><label title="运营状态。testing=测试款，main=主推款，restock=补货款，clear=清库存款，paused=暂停款。">状态</label><select id="skuStatus" title="SKU当前运营状态。排期生成默认跳过 paused；main 适合作为优先主推。"><option value="testing">测试</option><option value="main">主推</option><option value="restock">补货</option><option value="clear">清库存</option><option value="paused">暂停</option></select></div>
+            <div class="tt-field tt-field-full"><label title="给运营看的产品名，会被脚本生成器用于口播。">产品名</label><input id="skuName" title="TikTok展示用产品名。例如 24 inch brown highlight wig。"></div>
+            <div class="tt-field"><label title="用于脚本、封面和发布文案中的颜色卖点。">颜色</label><input id="skuColor" title="产品颜色，例如 brown highlight、ash brown、black。"></div>
+            <div class="tt-field"><label title="用于脚本口播和产品识别。">长度</label><input id="skuLength" title="产品长度，例如 24 inch、18 inch、bob。"></div>
+            <div class="tt-field"><label title="利润计算核心字段。默认可用23.99美元包邮价。">售价($)</label><input id="skuPrice" type="number" step="0.01" value="23.99" title="TikTok Shop售价。利润公式会用它计算平台费和净利。"></div>
+            <div class="tt-field"><label title="单件产品成本。可以填采购价、入仓价或你用于经营测算的成本口径。">产品成本($)</label><input id="skuCost" type="number" step="0.01" title="单件采购或入仓成本。成本越准，净利和保本价越可靠。"></div>
+            <div class="tt-field"><label title="单件尾程或配送成本。">尾程($)</label><input id="skuShipping" type="number" step="0.01" title="单件配送或尾程成本。会和产品成本合并显示为成本。"></div>
+            <div class="tt-field"><label title="平台费率。按售价乘以费率计算平台费。">平台费率</label><input id="skuFeeRate" type="number" step="0.01" value="0.06" title="平台费率，例如0.06代表6%。如果TikTok费率变化，在这里更新。"></div>
+            <div class="tt-field"><label title="单件预估广告费或达人佣金成本。">广告费($)</label><input id="skuAdCost" type="number" step="0.01" title="单件预估广告成本。无广告可填0；投流款建议填入实际平均获客成本。"></div>
+            <div class="tt-field"><label title="预估退货率。假发类目退货会显著影响利润，建议做15%、20%、30%几个场景。">退货率</label><input id="skuReturnRate" type="number" step="0.01" value="0.20" title="预估退货率，例如0.20代表20%。净利会扣除退款损失×退货率。"></div>
+            <div class="tt-field"><label title="每次退货造成的平均损失。留空时系统按产品成本+尾程估算。">退款损失($)</label><input id="skuRefundLoss" type="number" step="0.01" title="每次退货造成的平均损失，留空则按成本+尾程估算。"></div>
+            <div class="tt-field"><label title="当前可售库存。用于估算预计售完天数和补货风险。">库存</label><input id="skuStock" type="number" title="当前可售库存。后续可接TikTok或仓库库存，当前为手动录入。"></div>
+            <div class="tt-field"><label title="最近稳定日均销量。用于库存/日均销量计算预计售完天数。">日均销量</label><input id="skuDailySales" type="number" step="0.1" title="最近稳定日均销量。填0时不会计算售完天数。"></div>
+            <div class="tt-field"><label title="Lead Time：从下采购单到可售入仓的总天数。">补货LT(天)</label><input id="skuLeadTime" type="number" value="30" title="采购、运输、入仓总周期天数。若预计售完天数小于LT，会提示需补货。"></div>
+            <div class="tt-field"><label title="安全库存线。库存低于该值时提示低库存或需补货。">安全库存</label><input id="skuSafetyStock" type="number" value="10" title="低于该库存时提示风险。主推款建议设置更高。"></div>
+            <div class="tt-field tt-field-full"><label title="自由备注。建议记录供应链风险、素材方向、评论反馈或是否适合直播。">备注</label><textarea id="skuNotes" title="记录款式判断、供应链或内容备注。"></textarea></div>
         </div>
         <div class="tt-modal-actions">
             <button class="btn" style="background:#eee" onclick="closeSkuModal()" title="关闭SKU编辑窗">取消</button>
@@ -242,34 +265,36 @@
 
 <div class="tt-modal-overlay" id="videoModal" onclick="if(event.target===this)closeVideoModal()">
     <div class="tt-modal">
-        <h3 id="videoModalTitle">新增视频</h3>
+        <h3 id="videoModalTitle" title="用途：新增视频计划或录入已发布视频数据。保存后进入 tiktok_videos 表，用于排期管理和复盘诊断。">新增视频</h3>
         <input type="hidden" id="videoId">
         <div class="tt-form-grid">
-            <div class="tt-field"><label>账号</label><input id="videoAccount" title="发布账号名称"></div>
-            <div class="tt-field"><label>SKU</label><select id="videoSku" title="视频关联SKU">{% for s in skus %}<option value="{{ s.sku }}">{{ s.sku }}</option>{% endfor %}</select></div>
-            <div class="tt-field"><label>发布日期</label><input id="videoDate" type="date" value="{{ today }}" title="计划或实际发布日期"></div>
-            <div class="tt-field"><label>卖点角度</label><input id="videoAngle" title="视频主卖点，例如 发顶自然"></div>
-            <div class="tt-field"><label>已发布</label><select id="videoPosted" title="是否已发布到TikTok"><option value="0">待发布</option><option value="1">已发布</option></select></div>
-            <div class="tt-field"><label>播放</label><input id="videoViews" type="number" title="视频播放量"></div>
-            <div class="tt-field"><label>商品点击</label><input id="videoClicks" type="number" title="商品点击数"></div>
-            <div class="tt-field"><label>成交</label><input id="videoOrders" type="number" title="成交订单数"></div>
-            <div class="tt-field"><label>GMV($)</label><input id="videoGmv" type="number" step="0.01" title="视频带来的GMV"></div>
-            <div class="tt-field tt-field-full"><label>开头钩子</label><input id="videoHook" title="视频前3秒钩子"></div>
-            <div class="tt-field"><label>卖点</label><textarea id="videoSellingPoints" title="本条视频强调的卖点"></textarea></div>
-            <div class="tt-field"><label>展示顺序</label><textarea id="videoDisplayOrder" title="视频镜头展示顺序"></textarea></div>
-            <div class="tt-field tt-field-full"><label>口播</label><textarea id="videoVoiceover" title="视频口播文本"></textarea></div>
-            <div class="tt-field"><label>封面</label><textarea id="videoCover" title="封面文案"></textarea></div>
-            <div class="tt-field"><label>发布文案</label><textarea id="videoCaption" title="发布文案"></textarea></div>
-            <div class="tt-field"><label>标签</label><textarea id="videoHashtags" title="视频标签"></textarea></div>
-            <div class="tt-field"><label>评论反馈</label><textarea id="videoComments" title="评论关键词或顾客反馈"></textarea></div>
-            <div class="tt-field"><label>诊断</label><input id="videoDiagnosis" title="留空则系统按播放、点击、成交自动诊断"></div>
-            <div class="tt-field"><label>复拍动作</label><input id="videoRepeatAction" title="留空则系统按数据自动建议复拍动作"></div>
+            <div class="tt-field"><label title="发布账号。用于比较官方号和渠道号的内容表现。">账号</label><input id="videoAccount" title="发布账号名称，例如 official、channel01。"></div>
+            <div class="tt-field"><label title="视频关联SKU。复盘会把视频表现和SKU利润/库存连起来。">SKU</label><select id="videoSku" title="视频关联SKU，来自 tiktok_skus 表。">{% for s in skus %}<option value="{{ s.sku }}">{{ s.sku }}</option>{% endfor %}</select></div>
+            <div class="tt-field"><label title="计划或实际发布日期。排期生成会自动填入。">发布日期</label><input id="videoDate" type="date" value="{{ today }}" title="计划或实际发布日期。"></div>
+            <div class="tt-field"><label title="本条视频主卖点，例如颜色、发顶、背面、新手友好。">卖点角度</label><input id="videoAngle" title="视频主卖点，例如 发顶自然。用于后续判断哪个卖点值得复拍。"></div>
+            <div class="tt-field"><label title="发布状态。待发布用于排期，已发布用于复盘。">已发布</label><select id="videoPosted" title="是否已发布到TikTok。待发布记录会计入待发布统计。"><option value="0">待发布</option><option value="1">已发布</option></select></div>
+            <div class="tt-field"><label title="TikTok后台播放量。用于判断内容拿流量能力。">播放</label><input id="videoViews" type="number" title="视频播放量。播放高但点击低，通常要优化封面/前3秒。"></div>
+            <div class="tt-field"><label title="TikTok商品点击数。用于计算CTR。">商品点击</label><input id="videoClicks" type="number" title="商品点击数。CTR=商品点击/播放。"></div>
+            <div class="tt-field"><label title="视频带来的订单数。用于判断转化能力。">成交</label><input id="videoOrders" type="number" title="成交订单数。成交高的视频结构优先复拍。"></div>
+            <div class="tt-field"><label title="视频GMV。用于计算客单价 AOV=GMV/成交数。">GMV($)</label><input id="videoGmv" type="number" step="0.01" title="视频带来的GMV。成交为0时AOV显示为0。"></div>
+            <div class="tt-field tt-field-full"><label title="前3秒钩子。用于记录这个视频为什么吸引停留。">开头钩子</label><input id="videoHook" title="视频前3秒钩子，例如 This color looks so natural in daylight。"></div>
+            <div class="tt-field"><label title="本条视频强调的卖点。建议写2-4个关键词，方便后续复盘。">卖点</label><textarea id="videoSellingPoints" title="本条视频强调的卖点，例如 natural top、beginner friendly、23.99 free shipping。"></textarea></div>
+            <div class="tt-field"><label title="镜头顺序。用于复拍时复用有效结构。">展示顺序</label><textarea id="videoDisplayOrder" title="视频镜头展示顺序，例如 full look -> top close-up -> back view -> CTA。"></textarea></div>
+            <div class="tt-field tt-field-full"><label title="口播或字幕脚本。可以从脚本工厂复制过来，也可手动改。">口播</label><textarea id="videoVoiceover" title="视频口播文本。用于保存内容资产，方便复拍和批量改写。"></textarea></div>
+            <div class="tt-field"><label title="封面文案。播放高点击低时，优先回看封面是否直接表达卖点。">封面</label><textarea id="videoCover" title="封面文案。建议短、直接、带核心卖点或价格。"></textarea></div>
+            <div class="tt-field"><label title="TikTok发布文案。可记录实际发布版本，方便对比不同文案表现。">发布文案</label><textarea id="videoCaption" title="发布文案。建议保留价格、卖点和CTA。"></textarea></div>
+            <div class="tt-field"><label title="视频标签。用于保留实际发布标签组合。">标签</label><textarea id="videoHashtags" title="视频标签，例如 #wig #beginnerwig #tiktokshop。"></textarea></div>
+            <div class="tt-field"><label title="评论关键词或顾客反馈。系统会识别 color/颜色、wear/beginner/新手 等关键词，给补拍建议。">评论反馈</label><textarea id="videoComments" title="评论关键词或顾客反馈。例如 color?、how to wear、looks wiggy。"></textarea></div>
+            <div class="tt-field"><label title="可手动填写，也可留空让系统根据播放、点击、成交自动诊断。">诊断</label><input id="videoDiagnosis" title="留空则系统按播放、点击、成交自动诊断。"></div>
+            <div class="tt-field"><label title="可手动填写，也可留空让系统给复拍或优化建议。">复拍动作</label><input id="videoRepeatAction" title="留空则系统按数据自动建议复拍动作。"></div>
         </div>
         <div class="tt-modal-actions">
             <button class="btn" style="background:#eee" onclick="closeVideoModal()" title="关闭视频编辑窗">取消</button>
             <button class="btn btn-primary" onclick="saveVideo()" title="保存视频计划或复盘数据">保存</button>
         </div>
     </div>
+</div>
+
 </div>
 
 <script>
@@ -373,10 +398,26 @@ function renderSchedule(rows){
     var box = document.getElementById('scheduleResult');
     box.style.display = 'block';
     if(rows.length === 0){ box.innerHTML = '<div class="empty">没有可生成的排期</div>'; return; }
-    var html = '<table class="tt-table"><thead><tr><th>日期</th><th>账号</th><th>SKU</th><th>角度</th><th>展示顺序</th><th>封面</th><th>文案</th></tr></thead><tbody>';
+    var html = '<table class="tt-table"><thead><tr>';
+    html += '<th title="排期日期：从开始日期连续生成。">日期</th>';
+    html += '<th title="发布账号：来自账号输入框，每个账号每天生成1条视频。">账号</th>';
+    html += '<th title="关联SKU：来自上方勾选SKU，系统避免同账号连续两天发同一个SKU。">SKU</th>';
+    html += '<th title="卖点角度：系统从卖点池轮换，避免连续内容过于重复。">角度</th>';
+    html += '<th title="展示顺序：建议拍摄镜头顺序，可直接给拍摄或剪辑使用。">展示顺序</th>';
+    html += '<th title="封面文案：建议放在视频封面或第一屏字幕。">封面</th>';
+    html += '<th title="发布文案：可直接复制到TikTok发布说明。">文案</th>';
+    html += '</tr></thead><tbody>';
     for(var i=0; i<rows.length; i++){
         var x = rows[i];
-        html += '<tr><td>'+esc(x.publish_date)+'</td><td>'+esc(x.account_name)+'</td><td><strong>'+esc(x.sku)+'</strong></td><td>'+esc(x.video_angle)+'</td><td>'+esc(x.display_order)+'</td><td>'+esc(x.cover_text)+'</td><td>'+esc(x.caption)+'</td></tr>';
+        html += '<tr>';
+        html += '<td title="发布日期：'+esc(x.publish_date)+'。">'+esc(x.publish_date)+'</td>';
+        html += '<td title="账号：'+esc(x.account_name)+'。每天每个账号1条视频。">'+esc(x.account_name)+'</td>';
+        html += '<td title="SKU：'+esc(x.sku)+'。生成并保存后会写入视频复盘表。"><strong>'+esc(x.sku)+'</strong></td>';
+        html += '<td title="卖点角度：'+esc(x.video_angle)+'。用来决定口播、封面和展示顺序。">'+esc(x.video_angle)+'</td>';
+        html += '<td title="拍摄/剪辑顺序：'+esc(x.display_order)+'。">'+esc(x.display_order)+'</td>';
+        html += '<td title="封面文案：'+esc(x.cover_text)+'。">'+esc(x.cover_text)+'</td>';
+        html += '<td title="发布文案：'+esc(x.caption)+'。">'+esc(x.caption)+'</td>';
+        html += '</tr>';
     }
     html += '</tbody></table>';
     box.innerHTML = html;
