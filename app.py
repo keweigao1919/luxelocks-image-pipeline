@@ -3073,11 +3073,30 @@ async def tiktok_sku_mapping_delete(request: Request):
         conn.close()
 
 
+# 列表需要的列（避免 SELECT * 加载40列）
+_VIDEO_LIST_COLS = [
+    "id","creator_nickname","video_info","video_id","publish_time",
+    "product_name","tiktok_product_id","sku","simple_sku",
+    "vv","product_clicks","attributed_sku_orders","attributed_gmv",
+    "platform_diagnosis","local_diagnosis","repeat_action"
+]
+_VIDEO_LIST_SELECT = ",".join(_VIDEO_LIST_COLS)
+
 @app.get("/tiktok-videos", response_class=HTMLResponse)
-async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "all"):
-    """TikTok 视频表现导入表"""
+async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "all", page: int = 1):
+    """TikTok 视频表现导入表（分页，每页50条）"""
     conn = get_db()
     try:
+        per_page = 50
+        # 允许排序的白名单
+        allowed_sort = {"publish_time", "vv", "product_clicks", "attributed_sku_orders", "attributed_gmv", "id"}
+        sort = request.query_params.get("sort", "publish_time")
+        order = request.query_params.get("order", "desc")
+        if sort not in allowed_sort:
+            sort = "publish_time"
+        if order not in ("asc", "desc"):
+            order = "desc"
+
         where = ["1=1"]
         params = []
         if search:
@@ -3092,11 +3111,20 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
         elif mapped == "unmapped":
             where.append("sku LIKE 'TT-%'")
         where_clause = " AND ".join(where)
+
+        # 总数
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM tiktok_video_performance WHERE {where_clause}", params
+        ).fetchone()[0]
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        offset = max(0, min(page, total_pages) - 1) * per_page
+
         rows = conn.execute(
-            f"SELECT * FROM tiktok_video_performance WHERE {where_clause} "
-            "ORDER BY publish_time DESC, id DESC LIMIT 500",
-            params
+            f"SELECT {_VIDEO_LIST_SELECT} FROM tiktok_video_performance WHERE {where_clause} "
+            f"ORDER BY {sort} {order} LIMIT ? OFFSET ?",
+            params + [per_page, offset]
         ).fetchall()
+
         stats = conn.execute("""
             SELECT
                 COUNT(*) as total,
@@ -3117,7 +3145,12 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
             rows=[dict(r) for r in rows],
             stats=stats_d,
             search=search,
-            mapped=mapped
+            mapped=mapped,
+            page=page,
+            total_pages=total_pages,
+            total=total,
+            sort=sort,
+            order=order
         )
     finally:
         conn.close()
