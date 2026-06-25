@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}TikTok SKUs表{% endblock %}
+{% block content %}
+<style>
+.sku-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:16px; }
+.sku-sub { color:#888; font-size:12px; margin-top:4px; }
+.sku-table-wrap { overflow:auto; max-height:620px; }
+.sku-table th { white-space:nowrap; position:sticky; top:0; z-index:1; }
+.sku-pill { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; background:#e3f2fd; color:#2196f3; }
+.sku-modal-overlay { display:none; position:fixed; inset:0; z-index:9998; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; padding:20px; }
+.sku-modal { background:white; border-radius:8px; padding:22px; width:min(760px, 96vw); max-height:92vh; overflow:auto; }
+.sku-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px; }
+.sku-field label { display:block; font-size:12px; color:#666; font-weight:600; margin-bottom:4px; }
+.sku-field input, .sku-field textarea { width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
+.sku-field textarea { min-height:70px; resize:vertical; }
+.sku-full { grid-column:1 / -1; }
+.sku-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.sku-btn { padding:3px 8px; border:1px solid #ddd; background:white; border-radius:4px; cursor:pointer; font-size:11px; margin-right:3px; }
+.sku-btn.danger { color:#e53935; border-color:#fce4ec; }
+#skuPage [title] { cursor:help; }
+#skuPage button[title] { cursor:pointer; }
+</style>
+
+<div id="skuPage">
+<div class="sku-head">
+    <div>
+        <h2 title="页面用途：维护 TikTok商品ID 与 Shopify SKU 的映射。TikTok Videos导入时会用这个表把商品表现归到真实SKU。">🎵 TikTok SKUs表</h2>
+        <div class="sku-sub" title="关系说明：TikTok Videos表从商品字段末尾括号提取商品ID；如果这里能找到对应SKU，就能同步到 Wig Ops 的视频复盘和SKU利润库存分析。">TikTok商品ID ↔ Shopify SKU 映射 ({{ mappings|length }} 条)</div>
+    </div>
+    <div>
+        <button class="btn btn-primary" onclick="showSkuMap()" title="新增一条 TikTok商品ID 到 Shopify SKU 的映射。">＋ 新增映射</button>
+        <a class="btn" href="/tiktok-videos" style="background:#eee;text-decoration:none" title="打开 TikTok Videos表，导入视频表现xlsx并查看未映射商品。">Videos表</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span title="表格说明：每一行代表一个 TikTok商品ID 和店铺SKU的对应关系。导入视频表现时按商品ID自动匹配。">映射列表</span>
+    </div>
+    <div class="card-body" style="padding:0">
+        {% if mappings %}
+        <div class="sku-table-wrap">
+            <table class="sku-table">
+                <thead>
+                    <tr>
+                        <th title="序号，仅用于浏览。">#</th>
+                        <th title="来自TikTok商品字段末尾括号中的长数字，例如 商品名(1732277674835415824)。">TikTok商品ID</th>
+                        <th title="对应的Shopify SKU或本地运营SKU。">SKU</th>
+                        <th title="系统自动或手动填写的简化SKU，用于和采购、库存、Wig Ops对应。">简化SKU</th>
+                        <th title="售价，用于后续和SKU利润测算打通。">售价</th>
+                        <th title="产品成本，用于后续和利润测算打通。">产品成本</th>
+                        <th title="尾程配送成本。">尾程</th>
+                        <th title="平台费率，例如0.06代表6%。">平台费</th>
+                        <th title="单件广告成本或达人佣金估算。">广告费</th>
+                        <th title="每次退货造成的平均损失。">退款损失</th>
+                        <th title="预估退货率，例如0.20代表20%。">退货率</th>
+                        <th title="编辑或删除该映射。">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in mappings %}
+                    <tr>
+                        <td style="color:#999;font-size:11px">{{ loop.index }}</td>
+                        <td title="TikTok商品ID：{{ m.tiktok_product_id }}" style="font-family:monospace;font-size:13px">{{ m.tiktok_product_id }}</td>
+                        <td title="映射SKU：{{ m.sku }}"><strong style="color:#e94560">{{ m.sku }}</strong></td>
+                        <td title="简化SKU：{{ m.simple_sku or '-' }}"><span class="sku-pill">{{ m.simple_sku or '-' }}</span></td>
+                        <td title="售价：{{ m.price or 0 }}">{% if m.price %}${{ '%.2f'|format(m.price) }}{% else %}-{% endif %}</td>
+                        <td title="产品成本：{{ m.product_cost or 0 }}">{% if m.product_cost %}${{ '%.2f'|format(m.product_cost) }}{% else %}-{% endif %}</td>
+                        <td title="尾程：{{ m.shipping_fee or 0 }}">{% if m.shipping_fee %}${{ '%.2f'|format(m.shipping_fee) }}{% else %}-{% endif %}</td>
+                        <td title="平台费率：{{ m.platform_fee_rate or 0 }}">{% if m.platform_fee_rate %}{{ m.platform_fee_rate }}{% else %}-{% endif %}</td>
+                        <td title="广告费：{{ m.ad_cost or 0 }}">{% if m.ad_cost %}${{ '%.2f'|format(m.ad_cost) }}{% else %}-{% endif %}</td>
+                        <td title="退款损失：{{ m.refund_loss or 0 }}">{% if m.refund_loss %}${{ '%.2f'|format(m.refund_loss) }}{% else %}-{% endif %}</td>
+                        <td title="退货率：{{ m.return_rate or 0 }}">{% if m.return_rate %}{{ m.return_rate }}{% else %}-{% endif %}</td>
+                        <td style="white-space:nowrap">
+                            <button class="sku-btn" onclick="editSkuMap({{ loop.index0 }})" title="编辑该商品ID和SKU映射。">编辑</button>
+                            <button class="sku-btn danger" onclick="deleteSkuMap({{ loop.index0 }})" title="删除该映射。删除后再次导入视频会变成未映射。">删</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty" title="暂无映射。建议先从 TikTok Videos表导入一次，查看未映射商品ID，再回到这里新增映射。">暂无映射，点击「＋ 新增映射」</div>
+        {% endif %}
+    </div>
+</div>
+</div>
+
+<div class="sku-modal-overlay" id="skuMapModal" onclick="if(event.target===this)closeSkuMap()">
+    <div class="sku-modal">
+        <h3 id="skuMapTitle" title="保存后写入 tiktok_sku_mapping 表，供 TikTok Videos 导入时自动匹配SKU。">新增映射</h3>
+        <input type="hidden" id="mapId">
+        <div class="sku-form">
+            <div class="sku-field"><label title="TikTok商品ID，来自TikTok导出表商品字段末尾括号。">TikTok商品ID</label><input id="mapProductId" title="例如 1732277674835415824"></div>
+            <div class="sku-field"><label title="对应Shopify SKU或运营SKU。">SKU</label><input id="mapSku" title="例如 SWLC1261-4BR24 或 1261-4"></div>
+            <div class="sku-field"><label title="留空时系统会从SKU中自动提取如 1261-4。">简化SKU</label><input id="mapSimpleSku" title="例如 1261-4"></div>
+            <div class="sku-field"><label title="可选，用于后续利润测算。">售价($)</label><input id="mapPrice" type="number" step="0.01"></div>
+            <div class="sku-field"><label title="可选，产品成本。">产品成本($)</label><input id="mapCost" type="number" step="0.01"></div>
+            <div class="sku-field"><label title="可选，尾程配送成本。">尾程($)</label><input id="mapShipping" type="number" step="0.01"></div>
+            <div class="sku-field"><label title="可选，平台费率，例如0.06。">平台费率</label><input id="mapFeeRate" type="number" step="0.01" value="0.06"></div>
+            <div class="sku-field"><label title="可选，单件广告费。">广告费($)</label><input id="mapAdCost" type="number" step="0.01"></div>
+            <div class="sku-field"><label title="可选，每次退货损失。">退款损失($)</label><input id="mapRefundLoss" type="number" step="0.01"></div>
+            <div class="sku-field"><label title="可选，退货率，例如0.20。">退货率</label><input id="mapReturnRate" type="number" step="0.01" value="0.20"></div>
+            <div class="sku-field sku-full"><label title="可选备注。">备注</label><textarea id="mapNotes"></textarea></div>
+        </div>
+        <div class="sku-actions">
+            <button class="btn" style="background:#eee" onclick="closeSkuMap()">取消</button>
+            <button class="btn btn-primary" onclick="saveSkuMap()">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var skuMapData = [
+{% for m in mappings %}
+    {"id":{{ m.id }},"tiktok_product_id":{{ m.tiktok_product_id|tojson }},"sku":{{ m.sku|tojson }},"simple_sku":{{ m.simple_sku|tojson }},"price":{{ m.price|tojson }},"product_cost":{{ m.product_cost|tojson }},"shipping_fee":{{ m.shipping_fee|tojson }},"platform_fee_rate":{{ m.platform_fee_rate|tojson }},"ad_cost":{{ m.ad_cost|tojson }},"refund_loss":{{ m.refund_loss|tojson }},"return_rate":{{ m.return_rate|tojson }},"notes":{{ m.notes|tojson }}}{% if not loop.last %},{% endif %}
+{% endfor %}
+];
+function mapVal(id){ return document.getElementById(id).value; }
+function setMapVal(id, value){ document.getElementById(id).value = value == null ? '' : value; }
+function showSkuMap(){
+    document.getElementById('skuMapTitle').textContent = '新增映射';
+    ['mapId','mapProductId','mapSku','mapSimpleSku','mapPrice','mapCost','mapShipping','mapAdCost','mapRefundLoss','mapNotes'].forEach(function(id){ setMapVal(id, ''); });
+    setMapVal('mapFeeRate', '0.06'); setMapVal('mapReturnRate', '0.20');
+    document.getElementById('skuMapModal').style.display = 'flex';
+}
+function editSkuMap(idx){
+    var m = skuMapData[idx]; if(!m) return;
+    document.getElementById('skuMapTitle').textContent = '编辑映射';
+    setMapVal('mapId', m.id); setMapVal('mapProductId', m.tiktok_product_id); setMapVal('mapSku', m.sku); setMapVal('mapSimpleSku', m.simple_sku);
+    setMapVal('mapPrice', m.price); setMapVal('mapCost', m.product_cost); setMapVal('mapShipping', m.shipping_fee); setMapVal('mapFeeRate', m.platform_fee_rate);
+    setMapVal('mapAdCost', m.ad_cost); setMapVal('mapRefundLoss', m.refund_loss); setMapVal('mapReturnRate', m.return_rate); setMapVal('mapNotes', m.notes);
+    document.getElementById('skuMapModal').style.display = 'flex';
+}
+function closeSkuMap(){ document.getElementById('skuMapModal').style.display = 'none'; }
+async function saveSkuMap(){
+    var data = {
+        id: mapVal('mapId'), tiktok_product_id: mapVal('mapProductId').trim(), sku: mapVal('mapSku').trim(), simple_sku: mapVal('mapSimpleSku').trim(),
+        price: mapVal('mapPrice'), product_cost: mapVal('mapCost'), shipping_fee: mapVal('mapShipping'), platform_fee_rate: mapVal('mapFeeRate'),
+        ad_cost: mapVal('mapAdCost'), refund_loss: mapVal('mapRefundLoss'), return_rate: mapVal('mapReturnRate'), notes: mapVal('mapNotes').trim()
+    };
+    if(!data.tiktok_product_id || !data.sku){ showToast('TikTok商品ID和SKU必填'); return; }
+    var r = await fetch('/api/tiktok-sku/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    var d = await r.json();
+    if(d.status === 'ok'){ closeSkuMap(); location.reload(); } else { showToast('保存失败: '+d.message); }
+}
+async function deleteSkuMap(idx){
+    var m = skuMapData[idx]; if(!m) return;
+    if(!confirm('删除商品ID '+m.tiktok_product_id+' 的映射？')) return;
+    var r = await fetch('/api/tiktok-sku/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:m.id})});
+    var d = await r.json();
+    if(d.status === 'ok'){ location.reload(); } else { showToast('删除失败'); }
+}
+</script>
+{% endblock %}

@@ -77,9 +77,30 @@ created_at, updated_at
 
 ### tiktok_videos
 ```
-id PK, account_name, sku, publish_date, video_angle, hook, selling_points,
-display_order, voiceover, cover_text, caption, hashtags, posted(0/1),
-views, product_clicks, orders, gmv, comments, diagnosis, repeat_action,
+id PK, account_name, sku, tiktok_video_id, tiktok_product_id, product_name,
+creator_id, publish_date, video_angle, hook, selling_points, display_order,
+voiceover, cover_text, caption, hashtags, posted(0/1), views, likes_count,
+comments_count, shares_count, product_impressions, product_clicks, orders,
+gmv, video_ctr, completion_rate, gpm, comments, platform_diagnosis,
+diagnosis, repeat_action, source_file, created_at, updated_at
+```
+
+### tiktok_video_performance
+```
+id PK, import_key UNIQUE(video_id|tiktok_product_id), creator_nickname, creator_id,
+video_info, video_id, publish_time, product_name, tiktok_product_id,
+sku, simple_sku, vv, likes_count, comments_count, shares_count,
+new_followers_count, product_redirects, product_impressions, product_clicks,
+unique_customers, attributed_sku_orders, video_sku_orders, indirect_sku_orders,
+attributed_units, product_units, indirect_units, attributed_gmv, video_gmv,
+indirect_gmv, gpm, video_ctr, redirect_rate, completion_rate, ctor_sku_orders,
+platform_diagnosis, local_diagnosis, repeat_action, source_file, imported_at, updated_at
+```
+
+### tiktok_sku_mapping
+```
+id PK, tiktok_product_id UNIQUE, sku, simple_sku, price, product_cost,
+shipping_fee, platform_fee_rate, ad_cost, refund_loss, return_rate, notes,
 created_at, updated_at
 ```
 
@@ -163,6 +184,8 @@ cross_inv{simplified_sku: total_avail} ← warehouse_inventory汇总
 | `/suppliers` | 供应商 | suppliers.html |
 | `/media` | 素材 | media.html |
 | `/tiktok` | TikTok运营 | tiktok.html |
+| `/tiktok-videos` | TikTok视频表现导入表 | tiktok_videos.html |
+| `/tiktok-sku` | TikTok商品ID-SKU映射表 | tiktok_sku.html |
 | `/reminders` | 提醒 | reminders.html |
 | `/headhaul` | 头程 | headhaul.html |
 | `/sku-mapping` | SKU映射 | sku_mapping.html |
@@ -209,6 +232,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 | 日期 | AI | 改动内容 |
 |------|-----|---------|
+| 2026-06-25 | Codex | 新增 TikTok Videos 表导入页：app.py 添加 tiktok_video_performance 表、扩展 tiktok_videos 指标字段、完善 tiktok_sku_mapping 映射表/API、支持导入 TikTok Video Performance List xlsx 并同步到 Wig Ops 视频复盘；base.html 新增 /tiktok-videos 与 /tiktok-sku 入口；新增 tiktok_videos.html 与完善 tiktok_sku.html |
 | 2026-06-25 | Codex | 补全 TikTok Wig Ops 页面 hover 指导信息：templates/tiktok.html 为标题、统计卡、表头、数据行、脚本工厂、排期、视频复盘和弹窗字段增加 title，说明数据来源/计算逻辑/操作方法 |
 | 2026-06-25 | Codex | 新增 TikTok Wig Ops 中控模块：app.py 添加 tiktok_skus/tiktok_videos 表、利润/补货计算、脚本生成、7天排期、视频复盘API；templates/base.html 增加入口；新增 templates/tiktok.html 页面 |
 | 2026-06-25 | Codex | 补齐三方入口文档：memory/MEMORY.md 与 .cursorrules 均要求先读 WORKING.md + CLAUDE.md，避免 Claude/Claude Code/Codex 漏看实时看板 |

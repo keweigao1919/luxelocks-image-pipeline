@@ -13,6 +13,9 @@ import asyncio
 import smtplib
 import threading
 import time
+import re
+import zipfile
+from io import BytesIO
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
@@ -228,6 +231,38 @@ def init_db():
     except: pass
     try: conn.execute("ALTER TABLE reminders ADD COLUMN repeat_day INTEGER DEFAULT 0")
     except: pass
+    # TikTok SKU映射
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS tiktok_sku_mapping (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tiktok_product_id TEXT NOT NULL UNIQUE,
+            sku TEXT NOT NULL,
+            simple_sku TEXT,
+            price REAL DEFAULT 0,
+            product_cost REAL DEFAULT 0,
+            shipping_fee REAL DEFAULT 0,
+            platform_fee_rate REAL DEFAULT 0.06,
+            ad_cost REAL DEFAULT 0,
+            refund_loss REAL DEFAULT 0,
+            return_rate REAL DEFAULT 0.20,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    for sql in [
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN simple_sku TEXT",
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN price REAL DEFAULT 0",
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN product_cost REAL DEFAULT 0",
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN shipping_fee REAL DEFAULT 0",
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN platform_fee_rate REAL DEFAULT 0.06",
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN ad_cost REAL DEFAULT 0",
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN refund_loss REAL DEFAULT 0",
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN return_rate REAL DEFAULT 0.20",
+        "ALTER TABLE tiktok_sku_mapping ADD COLUMN notes TEXT",
+    ]:
+        try: conn.execute(sql)
+        except: pass
     # 采购资源信息池
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS procurement_resources (
@@ -299,6 +334,10 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             account_name TEXT,
             sku TEXT,
+            tiktok_video_id TEXT,
+            tiktok_product_id TEXT,
+            product_name TEXT,
+            creator_id TEXT,
             publish_date TEXT,
             video_angle TEXT,
             hook TEXT,
@@ -310,12 +349,21 @@ def init_db():
             hashtags TEXT,
             posted INTEGER DEFAULT 0,
             views INTEGER DEFAULT 0,
+            likes_count INTEGER DEFAULT 0,
+            comments_count INTEGER DEFAULT 0,
+            shares_count INTEGER DEFAULT 0,
+            product_impressions INTEGER DEFAULT 0,
             product_clicks INTEGER DEFAULT 0,
             orders INTEGER DEFAULT 0,
             gmv REAL DEFAULT 0,
+            video_ctr REAL DEFAULT 0,
+            completion_rate REAL DEFAULT 0,
+            gpm REAL DEFAULT 0,
             comments TEXT,
+            platform_diagnosis TEXT,
             diagnosis TEXT,
             repeat_action TEXT,
+            source_file TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -323,7 +371,74 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_tiktok_skus_sku ON tiktok_skus(sku);
         CREATE INDEX IF NOT EXISTS idx_tiktok_videos_sku ON tiktok_videos(sku);
         CREATE INDEX IF NOT EXISTS idx_tiktok_videos_date ON tiktok_videos(publish_date);
+
+        CREATE TABLE IF NOT EXISTS tiktok_video_performance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            import_key TEXT NOT NULL UNIQUE,
+            creator_nickname TEXT,
+            creator_id TEXT,
+            video_info TEXT,
+            video_id TEXT,
+            publish_time TEXT,
+            product_name TEXT,
+            tiktok_product_id TEXT,
+            sku TEXT,
+            simple_sku TEXT,
+            vv INTEGER DEFAULT 0,
+            likes_count INTEGER DEFAULT 0,
+            comments_count INTEGER DEFAULT 0,
+            shares_count INTEGER DEFAULT 0,
+            new_followers_count INTEGER DEFAULT 0,
+            product_redirects INTEGER DEFAULT 0,
+            product_impressions INTEGER DEFAULT 0,
+            product_clicks INTEGER DEFAULT 0,
+            unique_customers INTEGER DEFAULT 0,
+            attributed_sku_orders INTEGER DEFAULT 0,
+            video_sku_orders INTEGER DEFAULT 0,
+            indirect_sku_orders INTEGER DEFAULT 0,
+            attributed_units INTEGER DEFAULT 0,
+            product_units INTEGER DEFAULT 0,
+            indirect_units INTEGER DEFAULT 0,
+            attributed_gmv REAL DEFAULT 0,
+            video_gmv REAL DEFAULT 0,
+            indirect_gmv REAL DEFAULT 0,
+            gpm REAL DEFAULT 0,
+            video_ctr REAL DEFAULT 0,
+            redirect_rate REAL DEFAULT 0,
+            completion_rate REAL DEFAULT 0,
+            ctor_sku_orders REAL DEFAULT 0,
+            platform_diagnosis TEXT,
+            local_diagnosis TEXT,
+            repeat_action TEXT,
+            source_file TEXT,
+            imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_tiktok_video_perf_video ON tiktok_video_performance(video_id);
+        CREATE INDEX IF NOT EXISTS idx_tiktok_video_perf_product ON tiktok_video_performance(tiktok_product_id);
+        CREATE INDEX IF NOT EXISTS idx_tiktok_video_perf_sku ON tiktok_video_performance(sku);
     """)
+    for sql in [
+        "ALTER TABLE tiktok_videos ADD COLUMN tiktok_video_id TEXT",
+        "ALTER TABLE tiktok_videos ADD COLUMN tiktok_product_id TEXT",
+        "ALTER TABLE tiktok_videos ADD COLUMN product_name TEXT",
+        "ALTER TABLE tiktok_videos ADD COLUMN creator_id TEXT",
+        "ALTER TABLE tiktok_videos ADD COLUMN likes_count INTEGER DEFAULT 0",
+        "ALTER TABLE tiktok_videos ADD COLUMN comments_count INTEGER DEFAULT 0",
+        "ALTER TABLE tiktok_videos ADD COLUMN shares_count INTEGER DEFAULT 0",
+        "ALTER TABLE tiktok_videos ADD COLUMN product_impressions INTEGER DEFAULT 0",
+        "ALTER TABLE tiktok_videos ADD COLUMN video_ctr REAL DEFAULT 0",
+        "ALTER TABLE tiktok_videos ADD COLUMN completion_rate REAL DEFAULT 0",
+        "ALTER TABLE tiktok_videos ADD COLUMN gpm REAL DEFAULT 0",
+        "ALTER TABLE tiktok_videos ADD COLUMN platform_diagnosis TEXT",
+        "ALTER TABLE tiktok_videos ADD COLUMN source_file TEXT",
+    ]:
+        try: conn.execute(sql)
+        except: pass
+    try:
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_tiktok_videos_tiktok_id ON tiktok_videos(tiktok_video_id, tiktok_product_id)")
+    except:
+        pass
     # ── 迁移: 为 orders 添加 shipping_type 字段 ──
     try:
         conn.execute("ALTER TABLE orders ADD COLUMN shipping_type TEXT DEFAULT '国内直发'")
@@ -576,6 +691,271 @@ def generate_tiktok_schedule(sku_rows, accounts, start_date, days=7, max_per_sku
                 **script
             })
     return rows
+
+
+def xlsx_col_index(cell_ref: str) -> int:
+    letters = "".join(ch for ch in cell_ref if ch.isalpha())
+    idx = 0
+    for ch in letters:
+        idx = idx * 26 + (ord(ch.upper()) - ord("A") + 1)
+    return max(idx - 1, 0)
+
+
+def read_xlsx_first_sheet(file_bytes: bytes):
+    """Minimal XLSX reader for TikTok exports; avoids adding runtime dependencies."""
+    import xml.etree.ElementTree as ET
+    ns_main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    ns_rel = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+    rel_ns = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+    with zipfile.ZipFile(BytesIO(file_bytes)) as zf:
+        shared = []
+        if "xl/sharedStrings.xml" in zf.namelist():
+            root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+            for si in root.findall(f"{ns_main}si"):
+                parts = []
+                for t in si.iter(f"{ns_main}t"):
+                    parts.append(t.text or "")
+                shared.append("".join(parts))
+
+        sheet_path = "xl/worksheets/sheet1.xml"
+        if "xl/workbook.xml" in zf.namelist() and "xl/_rels/workbook.xml.rels" in zf.namelist():
+            workbook = ET.fromstring(zf.read("xl/workbook.xml"))
+            rels = ET.fromstring(zf.read("xl/_rels/workbook.xml.rels"))
+            first_sheet = workbook.find(f".//{ns_main}sheet")
+            if first_sheet is not None:
+                rid = first_sheet.attrib.get(f"{ns_rel}id")
+                for rel in rels.findall(f"{rel_ns}Relationship"):
+                    if rel.attrib.get("Id") == rid:
+                        target = rel.attrib.get("Target", "worksheets/sheet1.xml")
+                        sheet_path = "xl/" + target.lstrip("/")
+                        break
+
+        root = ET.fromstring(zf.read(sheet_path))
+        rows = []
+        max_cols = 0
+        for row in root.findall(f".//{ns_main}row"):
+            values = []
+            for cell in row.findall(f"{ns_main}c"):
+                idx = xlsx_col_index(cell.attrib.get("r", "A1"))
+                while len(values) <= idx:
+                    values.append("")
+                ctype = cell.attrib.get("t", "")
+                text = ""
+                if ctype == "inlineStr":
+                    parts = []
+                    for t in cell.iter(f"{ns_main}t"):
+                        parts.append(t.text or "")
+                    text = "".join(parts)
+                else:
+                    v = cell.find(f"{ns_main}v")
+                    text = v.text if v is not None and v.text is not None else ""
+                    if ctype == "s" and text != "":
+                        try:
+                            text = shared[int(text)]
+                        except Exception:
+                            pass
+                values[idx] = text
+            max_cols = max(max_cols, len(values))
+            rows.append(values)
+        for row in rows:
+            if len(row) < max_cols:
+                row.extend([""] * (max_cols - len(row)))
+        while rows and not any(str(v).strip() for v in rows[0]):
+            rows.pop(0)
+        if not rows:
+            return [], []
+        headers = [str(v).strip() for v in rows[0]]
+        data_rows = []
+        for row in rows[1:]:
+            if any(str(v).strip() for v in row):
+                data_rows.append({headers[i]: row[i] if i < len(row) else "" for i in range(len(headers))})
+        return headers, data_rows
+
+
+def parse_tiktok_number(value, default=0):
+    text = str(value or "").strip().replace(",", "")
+    if text.endswith("%"):
+        text = text[:-1]
+    if text.lower() in ("", "nan", "none", "-"):
+        return default
+    try:
+        return float(text)
+    except ValueError:
+        return default
+
+
+def parse_tiktok_int(value, default=0):
+    return int(round(parse_tiktok_number(value, default)))
+
+
+def parse_tiktok_publish_date(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    for fmt in ("%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y/%m/%d", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return text[:10].replace("/", "-")
+
+
+def split_tiktok_product(raw_product):
+    text = str(raw_product or "").strip()
+    match = re.search(r"\((\d{8,})\)\s*$", text)
+    if not match:
+        return text, ""
+    return text[:match.start()].strip(), match.group(1)
+
+
+def infer_tiktok_video_angle(text):
+    lower = (text or "").lower()
+    if any(word in lower for word in ["outdoor", "light", "color", "blonde", "brown", "highlight"]):
+        return "颜色自然光"
+    if any(word in lower for word in ["top", "part", "hairline", "natural-looking top"]):
+        return "发顶自然"
+    if any(word in lower for word in ["back", "layers", "full"]):
+        return "背面发量"
+    if any(word in lower for word in ["beginner", "glueless", "wear & go", "easy to wear"]):
+        return "新手友好"
+    if "23.99" in lower or "$23" in lower:
+        return "23.99包邮"
+    return "整体效果"
+
+
+def first_sentence(text, limit=140):
+    clean = " ".join(str(text or "").split())
+    if not clean:
+        return ""
+    for sep in [".", "!", "?", "\n"]:
+        pos = clean.find(sep)
+        if 10 <= pos <= limit:
+            return clean[:pos + 1]
+    return clean[:limit]
+
+
+def tiktok_perf_from_export_row(row, mapping, source_file):
+    product_name, product_id = split_tiktok_product(row.get("商品"))
+    mapped = mapping.get(product_id, {}) if product_id else {}
+    sku = mapped.get("sku") or (f"TT-{product_id}" if product_id else "")
+    simple = mapped.get("simple_sku") or simplify_sku(sku)
+    video_id = str(row.get("视频ID") or "").strip()
+    import_key = f"{video_id}|{product_id or product_name[:80]}"
+    views = parse_tiktok_int(row.get("VV"))
+    clicks = parse_tiktok_int(row.get("商品点击次数"))
+    orders = parse_tiktok_int(row.get("归因 SKU 订单数"))
+    gmv = parse_tiktok_number(row.get("视频归因 GMV ($)"))
+    metrics = diagnose_tiktok_video({
+        "views": views,
+        "product_clicks": clicks,
+        "orders": orders,
+        "gmv": gmv,
+        "comments": row.get("诊断") or ""
+    })
+    return {
+        "import_key": import_key,
+        "creator_nickname": str(row.get("达人昵称") or "").strip(),
+        "creator_id": str(row.get("达人ID") or "").strip(),
+        "video_info": str(row.get("视频信息") or "").strip(),
+        "video_id": video_id,
+        "publish_time": str(row.get("发布时间") or "").strip(),
+        "publish_date": parse_tiktok_publish_date(row.get("发布时间")),
+        "product_name": product_name,
+        "tiktok_product_id": product_id,
+        "sku": sku,
+        "simple_sku": simple,
+        "vv": views,
+        "likes_count": parse_tiktok_int(row.get("点赞数")),
+        "comments_count": parse_tiktok_int(row.get("评论数")),
+        "shares_count": parse_tiktok_int(row.get("分享数")),
+        "new_followers_count": parse_tiktok_int(row.get("新增粉丝数")),
+        "product_redirects": parse_tiktok_int(row.get("引流次数")),
+        "product_impressions": parse_tiktok_int(row.get("商品曝光次数")),
+        "product_clicks": clicks,
+        "unique_customers": parse_tiktok_int(row.get("去重客户数")),
+        "attributed_sku_orders": orders,
+        "video_sku_orders": parse_tiktok_int(row.get("视频 SKU 订单数")),
+        "indirect_sku_orders": parse_tiktok_int(row.get("视频间接 SKU 订单数")),
+        "attributed_units": parse_tiktok_int(row.get("视频归因成交件数")),
+        "product_units": parse_tiktok_int(row.get("视频商品成交件数")),
+        "indirect_units": parse_tiktok_int(row.get("视频间接成交件数")),
+        "attributed_gmv": gmv,
+        "video_gmv": parse_tiktok_number(row.get("视频 GMV ($)")),
+        "indirect_gmv": parse_tiktok_number(row.get("视频间接 GMV ($)")),
+        "gpm": parse_tiktok_number(row.get("GPM ($)")),
+        "video_ctr": parse_tiktok_number(row.get("点击率（视频）")),
+        "redirect_rate": parse_tiktok_number(row.get("引流率")),
+        "completion_rate": parse_tiktok_number(row.get("视频完播率")),
+        "ctor_sku_orders": parse_tiktok_number(row.get("CTOR（SKU 订单）")),
+        "platform_diagnosis": str(row.get("诊断") or "").strip(),
+        "local_diagnosis": metrics["diagnosis"],
+        "repeat_action": metrics["repeat_action"],
+        "source_file": source_file,
+        "video_angle": infer_tiktok_video_angle(row.get("视频信息") or product_name),
+        "hook": first_sentence(row.get("视频信息")),
+    }
+
+
+def upsert_tiktok_video_performance(conn, item):
+    columns = [
+        "import_key", "creator_nickname", "creator_id", "video_info", "video_id",
+        "publish_time", "product_name", "tiktok_product_id", "sku", "simple_sku",
+        "vv", "likes_count", "comments_count", "shares_count", "new_followers_count",
+        "product_redirects", "product_impressions", "product_clicks", "unique_customers",
+        "attributed_sku_orders", "video_sku_orders", "indirect_sku_orders",
+        "attributed_units", "product_units", "indirect_units", "attributed_gmv",
+        "video_gmv", "indirect_gmv", "gpm", "video_ctr", "redirect_rate",
+        "completion_rate", "ctor_sku_orders", "platform_diagnosis", "local_diagnosis",
+        "repeat_action", "source_file"
+    ]
+    placeholders = ", ".join("?" for _ in columns)
+    update_cols = [c for c in columns if c != "import_key"]
+    updates = ", ".join(f"{c}=excluded.{c}" for c in update_cols)
+    sql = (
+        f"INSERT INTO tiktok_video_performance ({', '.join(columns)}) VALUES ({placeholders}) "
+        f"ON CONFLICT(import_key) DO UPDATE SET {updates}, updated_at=CURRENT_TIMESTAMP"
+    )
+    conn.execute(sql, [item.get(c) for c in columns])
+
+
+def sync_perf_to_tiktok_videos(conn, item):
+    existing = conn.execute(
+        "SELECT id FROM tiktok_videos WHERE tiktok_video_id=? AND tiktok_product_id=?",
+        (item["video_id"], item["tiktok_product_id"])
+    ).fetchone()
+    data = (
+        item["creator_nickname"], item["sku"], item["video_id"], item["tiktok_product_id"],
+        item["product_name"], item["creator_id"], item["publish_date"], item["video_angle"],
+        item["hook"], item["video_info"], first_sentence(item["video_info"], 60),
+        item["video_info"], "", 1, item["vv"], item["likes_count"], item["comments_count"],
+        item["shares_count"], item["product_impressions"], item["product_clicks"],
+        item["attributed_sku_orders"], item["attributed_gmv"], item["video_ctr"],
+        item["completion_rate"], item["gpm"], "", item["platform_diagnosis"],
+        item["local_diagnosis"], item["repeat_action"], item["source_file"]
+    )
+    if existing:
+        conn.execute("""
+            UPDATE tiktok_videos SET
+                account_name=?, sku=?, tiktok_video_id=?, tiktok_product_id=?,
+                product_name=?, creator_id=?, publish_date=?, video_angle=?, hook=?,
+                voiceover=?, cover_text=?, caption=?, hashtags=?, posted=?, views=?,
+                likes_count=?, comments_count=?, shares_count=?, product_impressions=?,
+                product_clicks=?, orders=?, gmv=?, video_ctr=?, completion_rate=?,
+                gpm=?, comments=?, platform_diagnosis=?, diagnosis=?, repeat_action=?,
+                source_file=?, updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+        """, data + (existing["id"],))
+    else:
+        conn.execute("""
+            INSERT INTO tiktok_videos
+                (account_name, sku, tiktok_video_id, tiktok_product_id, product_name,
+                 creator_id, publish_date, video_angle, hook, voiceover, cover_text,
+                 caption, hashtags, posted, views, likes_count, comments_count,
+                 shares_count, product_impressions, product_clicks, orders, gmv,
+                 video_ctr, completion_rate, gpm, comments, platform_diagnosis,
+                 diagnosis, repeat_action, source_file)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, data)
 
 
 # ────────────────────────────────────────
@@ -2441,6 +2821,186 @@ async def procurement_product_list(search: str = ""):
 
 # ────────────────────────────────────────
 # TikTok Wig Ops 中控
+# ────────────────────────────────────────
+# TikTok SKU管理
+# ────────────────────────────────────────
+@app.get("/tiktok-sku", response_class=HTMLResponse)
+async def tiktok_sku_page(request: Request):
+    """TikTok SKU映射管理"""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM tiktok_sku_mapping ORDER BY COALESCE(simple_sku, sku), sku"
+        ).fetchall()
+        return render_html("tiktok_sku.html", request, mappings=[dict(r) for r in rows])
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok-sku/save")
+async def tiktok_sku_mapping_save(request: Request):
+    data = await request.json()
+    product_id = str(data.get("tiktok_product_id", "")).strip()
+    sku = str(data.get("sku", "")).strip()
+    if not product_id or not sku:
+        return {"status": "error", "message": "TikTok商品ID和SKU必填"}
+    simple = str(data.get("simple_sku", "")).strip() or simplify_sku(sku)
+    conn = get_db()
+    try:
+        values = (
+            product_id, sku, simple,
+            safe_float(data.get("price")), safe_float(data.get("product_cost")),
+            safe_float(data.get("shipping_fee")), safe_float(data.get("platform_fee_rate"), 0.06),
+            safe_float(data.get("ad_cost")), safe_float(data.get("refund_loss")),
+            safe_float(data.get("return_rate"), 0.20), str(data.get("notes", "")).strip()
+        )
+        if data.get("id"):
+            conn.execute("""
+                UPDATE tiktok_sku_mapping SET
+                    tiktok_product_id=?, sku=?, simple_sku=?, price=?, product_cost=?,
+                    shipping_fee=?, platform_fee_rate=?, ad_cost=?, refund_loss=?,
+                    return_rate=?, notes=?, updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            """, values + (safe_int(data.get("id")),))
+        else:
+            conn.execute("""
+                INSERT INTO tiktok_sku_mapping
+                    (tiktok_product_id, sku, simple_sku, price, product_cost,
+                     shipping_fee, platform_fee_rate, ad_cost, refund_loss,
+                     return_rate, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(tiktok_product_id) DO UPDATE SET
+                    sku=excluded.sku,
+                    simple_sku=excluded.simple_sku,
+                    price=excluded.price,
+                    product_cost=excluded.product_cost,
+                    shipping_fee=excluded.shipping_fee,
+                    platform_fee_rate=excluded.platform_fee_rate,
+                    ad_cost=excluded.ad_cost,
+                    refund_loss=excluded.refund_loss,
+                    return_rate=excluded.return_rate,
+                    notes=excluded.notes,
+                    updated_at=CURRENT_TIMESTAMP
+            """, values)
+        conn.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok-sku/delete")
+async def tiktok_sku_mapping_delete(request: Request):
+    data = await request.json()
+    rid = safe_int(data.get("id"))
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM tiktok_sku_mapping WHERE id=?", (rid,))
+        conn.commit()
+        return {"status": "ok"}
+    finally:
+        conn.close()
+
+
+@app.get("/tiktok-videos", response_class=HTMLResponse)
+async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "all"):
+    """TikTok 视频表现导入表"""
+    conn = get_db()
+    try:
+        where = ["1=1"]
+        params = []
+        if search:
+            st = f"%{search}%"
+            where.append(
+                "(creator_nickname LIKE ? OR video_info LIKE ? OR video_id LIKE ? OR "
+                "product_name LIKE ? OR tiktok_product_id LIKE ? OR sku LIKE ? OR simple_sku LIKE ?)"
+            )
+            params.extend([st, st, st, st, st, st, st])
+        if mapped == "mapped":
+            where.append("sku NOT LIKE 'TT-%'")
+        elif mapped == "unmapped":
+            where.append("sku LIKE 'TT-%'")
+        where_clause = " AND ".join(where)
+        rows = conn.execute(
+            f"SELECT * FROM tiktok_video_performance WHERE {where_clause} "
+            "ORDER BY publish_time DESC, id DESC LIMIT 500",
+            params
+        ).fetchall()
+        stats = conn.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN sku LIKE 'TT-%' THEN 1 ELSE 0 END) as unmapped,
+                SUM(vv) as views,
+                SUM(product_clicks) as clicks,
+                SUM(attributed_sku_orders) as orders,
+                SUM(attributed_gmv) as gmv,
+                MAX(imported_at) as latest_import
+            FROM tiktok_video_performance
+        """).fetchone()
+        stats_d = dict(stats)
+        stats_d["mapped"] = (stats_d.get("total") or 0) - (stats_d.get("unmapped") or 0)
+        stats_d["ctr"] = round((stats_d.get("clicks") or 0) / max(stats_d.get("views") or 0, 1) * 100, 2)
+        return render_html(
+            "tiktok_videos.html",
+            request,
+            rows=[dict(r) for r in rows],
+            stats=stats_d,
+            search=search,
+            mapped=mapped
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok-videos/import")
+async def tiktok_videos_import(file: UploadFile = File(...)):
+    """导入 TikTok Video Performance List xlsx，并同步到 Wig Ops 复盘表"""
+    filename = file.filename or "tiktok_video_performance.xlsx"
+    if not filename.lower().endswith(".xlsx"):
+        return {"status": "error", "message": "请上传 .xlsx 文件"}
+    content = await file.read()
+    conn = get_db()
+    try:
+        headers, raw_rows = read_xlsx_first_sheet(content)
+        required = ["达人昵称", "达人ID", "视频信息", "视频ID", "发布时间", "商品", "VV", "商品点击次数"]
+        missing = [h for h in required if h not in headers]
+        if missing:
+            return {"status": "error", "message": "缺少字段: " + ", ".join(missing)}
+        map_rows = conn.execute("SELECT * FROM tiktok_sku_mapping").fetchall()
+        mapping = {str(r["tiktok_product_id"]): dict(r) for r in map_rows}
+        imported = 0
+        synced = 0
+        unmapped = 0
+        skipped = 0
+        for raw in raw_rows:
+            item = tiktok_perf_from_export_row(raw, mapping, filename)
+            if not item["video_id"]:
+                skipped += 1
+                continue
+            upsert_tiktok_video_performance(conn, item)
+            imported += 1
+            if item["sku"].startswith("TT-"):
+                unmapped += 1
+            sync_perf_to_tiktok_videos(conn, item)
+            synced += 1
+        conn.commit()
+        return {
+            "status": "ok",
+            "headers": headers,
+            "imported": imported,
+            "synced": synced,
+            "unmapped": unmapped,
+            "skipped": skipped,
+            "message": f"导入 {imported} 行，同步复盘 {synced} 行，未映射 {unmapped} 行"
+        }
+    except Exception as e:
+        conn.rollback()
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
 # ────────────────────────────────────────
 @app.get("/tiktok", response_class=HTMLResponse)
 async def tiktok_ops_page(request: Request):
