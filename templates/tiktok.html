@@ -19,8 +19,10 @@
 .tt-pill-main { background:#e8f5e9; color:#27ae60; }
 .tt-pill-risk { background:#fce4ec; color:#e53935; }
 .tt-pill-test { background:#e3f2fd; color:#2196f3; }
+.tt-pill-info { background:#e3f2fd; color:#2196f3; }
 .tt-pill-warn { background:#fff3e0; color:#e67e22; }
 .tt-pill-pause { background:#eee; color:#666; }
+.tt-pill-map { background:#f3e5f5; color:#8e44ad; }
 .tt-form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px; }
 .tt-field label { display:block; font-size:12px; color:#666; font-weight:600; margin-bottom:4px; }
 .tt-field input, .tt-field select, .tt-field textarea { width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
@@ -46,7 +48,7 @@
 <div id="ttOps">
 <div class="tt-header">
     <div>
-        <h2 title="模块用途：TikTok假发店铺运营中控。数据来源：本页手动录入并保存到本地SQLite的 tiktok_skus 和 tiktok_videos 表。核心逻辑：先管理SKU利润/库存，再生成排期和脚本，最后录入视频数据做复盘。">🎥 TikTok Wig Ops</h2>
+        <h2 title="模块用途：TikTok假发店铺运营中控。数据来源：tiktok_skus 运营表、tiktok_sku_mapping 映射表、tiktok_videos 复盘表。核心逻辑：SKU映射表提供商品ID和SKU关系，SKU利润/补货补运营参数，脚本和复盘共同使用同一套SKU。">🎥 TikTok Wig Ops</h2>
         <div class="tt-sub" title="运营闭环：SKU管理 → 视频排期 → 脚本生成 → 发布后填播放/点击/成交 → 系统给诊断和复拍动作。">SKU、排期、脚本、利润、复盘</div>
     </div>
     <div class="tt-actions">
@@ -56,7 +58,7 @@
 </div>
 
 <div class="stats col4">
-    <div class="stat-card" title="数据来源：tiktok_skus 表。含义：当前已录入的TikTok运营SKU总数。操作：点击右上角 + SKU 新增测试款、主推款、补货款或清库存款。"><div class="label">SKU</div><div class="value">{{ stats.total_skus }}</div></div>
+    <div class="stat-card" title="数据来源：tiktok_skus + tiktok_sku_mapping 合并后的SKU数。含义：SKU利润/补货和脚本工厂可使用的SKU总数。"><div class="label">SKU</div><div class="value">{{ stats.total_skus }}</div></div>
     <div class="stat-card" title="计算逻辑：净利润 >= 6美元的SKU计为可主推。净利润 = 售价 - 产品成本 - 尾程 - 平台费 - 广告费 - 退款损失×退货率。"><div class="label">可主推</div><div class="value" style="color:#27ae60">{{ stats.main_push }}</div></div>
     <div class="stat-card" title="计算逻辑：净利润 < 3美元的SKU计为高风险。用途：提醒不要轻易加大投放或大批量补货。"><div class="label">高风险</div><div class="value" style="color:#e53935">{{ stats.high_risk }}</div></div>
     <div class="stat-card" title="数据来源：tiktok_videos 表。计算逻辑：posted=0 且发布日期大于等于今天的记录数。用途：查看还有多少排期视频没发布。"><div class="label">待发布</div><div class="value" style="color:#3498db">{{ stats.upcoming }}</div></div>
@@ -65,7 +67,7 @@
 <div class="tt-grid">
     <div class="tt-card">
         <div class="tt-card-header">
-            <span title="数据来源：tiktok_skus 表。用途：用售价、成本、平台费、广告费、退货率和库存判断SKU是主推、测试、补货、清库存还是暂停。">SKU利润 / 补货</span>
+            <span title="数据来源：tiktok_skus 运营表 + TikTok SKUs表。用途：如果SKU先在 TikTok SKUs表维护映射，会自动出现在这里；再补库存、日销、状态后，就能用于排期和利润补货判断。">SKU利润 / 补货</span>
             <button class="btn btn-sm btn-primary" onclick="showSkuModal()" title="新增SKU到TikTok运营中控表">＋ 新增</button>
         </div>
         <div class="tt-card-body" style="padding:0">
@@ -84,6 +86,7 @@
                         <th title="数据来源：SKU弹窗手动录入当前可售库存。后续可接TikTok或仓库库存。">库存</th>
                         <th title="计算逻辑：库存 / 日均销量 = 预计可卖天数；如果可卖天数小于补货LT或低于安全库存，会提示需补货。">售完</th>
                         <th title="状态来源：手动状态 + 利润判断。主推/测试/补货/清库存/暂停用于排期和运营决策。">状态</th>
+                        <th title="来源：ops=SKU利润/补货表；mapping=TikTok SKUs表；ops+mapping=两边都有。">来源</th>
                         <th title="操作方法：编辑修改SKU参数；脚本会把该SKU送入脚本工厂；删除会移除该SKU运营记录。">操作</th>
                     </tr>
                     </thead>
@@ -91,7 +94,7 @@
                     {% for s in skus %}
                     <tr>
                         <td><input type="checkbox" class="schedule-sku" value="{{ s.sku }}" checked title="勾选后参与视频排期生成"></td>
-                        <td title="SKU：{{ s.sku }}。颜色/长度：{{ s.color or '-' }} {{ s.length or '' }}。用途：排期、脚本和复盘都会用这个SKU串联。"><strong style="color:#e94560">{{ s.sku }}</strong><div class="tt-muted">{{ s.color or '-' }} {{ s.length or '' }}</div></td>
+                        <td title="SKU：{{ s.sku }}。简化SKU：{{ s.simple_sku or '-' }}。TikTok商品ID：{{ s.tiktok_product_id or '-' }}。用途：排期、脚本和复盘都会用这个SKU串联。"><strong style="color:#e94560">{{ s.sku }}</strong><div class="tt-muted">{{ s.simple_sku or '-' }} · {{ s.color or '-' }} {{ s.length or '' }}</div></td>
                         <td title="产品名：{{ s.product_name or '-' }}。建议写成运营能看懂的款式名，例如 24 inch brown highlight wig。">{{ s.product_name or '-' }}</td>
                         <td title="售价来源：SKU弹窗 price 字段。用于利润和脚本价格话术。">${{ '%.2f'|format(s.price or 0) }}</td>
                         <td title="成本逻辑：产品成本 {{ '%.2f'|format(s.product_cost or 0) }} + 尾程 {{ '%.2f'|format(s.shipping_fee or 0) }} = {{ '%.2f'|format((s.product_cost or 0) + (s.shipping_fee or 0)) }}。">${{ '%.2f'|format((s.product_cost or 0) + (s.shipping_fee or 0)) }}</td>
@@ -104,6 +107,11 @@
                             {% elif s.status == 'paused' %}<span class="tt-pill tt-pill-pause" title="状态来源：SKU手动标记为暂停。排期生成默认会跳过 paused SKU。">暂停</span>
                             {% elif s.profit_label == '高风险' %}<span class="tt-pill tt-pill-risk" title="判断逻辑：净利润低于3美元。建议：先复核成本、退货率、广告费或提高售价，不建议大力投放。">高风险</span>
                             {% else %}<span class="tt-pill tt-pill-test" title="判断逻辑：净利润介于3到6美元为可测试；高于等于6美元为可主推。">{{ s.profit_label }}</span>{% endif %}
+                        </td>
+                        <td title="来源说明：{{ s.source or 'ops' }}。ops来自Wig Ops运营表；mapping来自TikTok SKUs表；ops+mapping表示两边信息已合并。">
+                            {% if s.source == 'mapping' %}<span class="tt-pill tt-pill-map">映射表</span>
+                            {% elif s.source == 'ops+mapping' %}<span class="tt-pill tt-pill-main">已联动</span>
+                            {% else %}<span class="tt-pill tt-pill-info">运营表</span>{% endif %}
                         </td>
                         <td style="white-space:nowrap">
                             <button class="tt-compact-btn" onclick="editSkuByIdx({{ loop.index0 }})" title="编辑该SKU的价格、成本、退货率、库存和状态">编辑</button>
@@ -122,13 +130,19 @@
     </div>
 
     <div class="tt-card">
-        <div class="tt-card-header" title="用途：把SKU资料和卖点角度转换成TikTok视频口播、展示顺序、封面文案、发布文案和标签。数据来源：tiktok_skus 表。">脚本工厂</div>
+        <div class="tt-card-header" title="用途：把SKU资料和卖点角度转换成TikTok视频口播、展示顺序、封面文案、发布文案和标签。数据来源：SKU利润/补货表 + TikTok SKUs映射表。">脚本工厂</div>
         <div class="tt-card-body">
             <div class="tt-field" style="margin-bottom:10px">
-                <label title="操作方法：选择要生成脚本的SKU。脚本会读取该SKU的颜色、长度、价格和产品名。">SKU</label>
-                <select id="scriptSku" title="数据来源：tiktok_skus 表。选择后，生成脚本会自动带入产品名、颜色、长度和售价。">
-                    {% for s in skus %}<option value="{{ s.sku }}">{{ s.sku }} - {{ s.color or s.product_name or '' }}</option>{% endfor %}
-                </select>
+                <label title="操作方法：可输入完整SKU、简化SKU或TikTok商品ID；候选来源为 SKU利润/补货表 + TikTok SKUs表。">SKU / 简化SKU / 商品ID</label>
+                <input id="scriptSku" list="scriptSkuList" placeholder="输入SKU、简化SKU或TikTok商品ID..." title="输入时浏览器会弹出候选。例：输入 1261-4 可匹配 SWLC1261-4...；输入 TikTok商品ID 可匹配映射表SKU。">
+                <datalist id="scriptSkuList">
+                    {% for s in skus %}
+                    <option value="{{ s.sku }}" label="{{ s.label or s.sku }}"></option>
+                    {% if s.simple_sku %}<option value="{{ s.simple_sku }}" label="{{ s.sku }} · 简化SKU"></option>{% endif %}
+                    {% if s.tiktok_product_id %}<option value="{{ s.tiktok_product_id }}" label="{{ s.sku }} · TikTok商品ID"></option>{% endif %}
+                    {% endfor %}
+                </datalist>
+                <div id="scriptSkuHint" class="tt-muted" style="margin-top:4px" title="匹配提示：这里会显示当前输入匹配到的完整SKU、简化SKU、TikTok商品ID和来源。">输入后会自动匹配 SKU 来源</div>
             </div>
             <div class="tt-field" style="margin-bottom:10px">
                 <label title="逻辑来源：内置卖点池。不同角度会影响开头钩子、展示顺序和文案重点。">卖点角度</label>
@@ -136,7 +150,7 @@
                     {% for a in angle_pool %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
                 </select>
             </div>
-            <button class="btn btn-primary" onclick="generateScript()" title="按SKU和卖点角度生成口播、展示顺序、封面、文案和标签">生成脚本</button>
+            <button class="btn btn-primary" onclick="generateScript()" title="按SKU和卖点角度生成口播、展示顺序、封面、文案和标签；SKU可来自 TikTok SKUs表映射。">生成脚本</button>
             <div class="tt-field" style="margin-top:12px">
                 <label title="输出逻辑：根据SKU资料和卖点角度生成15秒左右口播，并附带8秒短版。可直接给剪映/CapCut做字幕或口播。">口播</label>
                 <textarea id="scriptVoiceover" class="tt-textarea-output" readonly title="生成结果区域：包含较完整口播和8秒短口播。操作：点击下方复制按钮复制全部脚本。"></textarea>
@@ -269,7 +283,7 @@
         <input type="hidden" id="videoId">
         <div class="tt-form-grid">
             <div class="tt-field"><label title="发布账号。用于比较官方号和渠道号的内容表现。">账号</label><input id="videoAccount" title="发布账号名称，例如 official、channel01。"></div>
-            <div class="tt-field"><label title="视频关联SKU。复盘会把视频表现和SKU利润/库存连起来。">SKU</label><select id="videoSku" title="视频关联SKU，来自 tiktok_skus 表。">{% for s in skus %}<option value="{{ s.sku }}">{{ s.sku }}</option>{% endfor %}</select></div>
+            <div class="tt-field"><label title="视频关联SKU。复盘会把视频表现和SKU利润/库存连起来。候选来自 Wig Ops + TikTok SKUs表。">SKU</label><select id="videoSku" title="视频关联SKU，来自 tiktok_skus 运营表和 tiktok_sku_mapping 映射表。">{% for s in skus %}<option value="{{ s.sku }}">{{ s.sku }}{% if s.simple_sku %} · {{ s.simple_sku }}{% endif %}</option>{% endfor %}</select></div>
             <div class="tt-field"><label title="计划或实际发布日期。排期生成会自动填入。">发布日期</label><input id="videoDate" type="date" value="{{ today }}" title="计划或实际发布日期。"></div>
             <div class="tt-field"><label title="本条视频主卖点，例如颜色、发顶、背面、新手友好。">卖点角度</label><input id="videoAngle" title="视频主卖点，例如 发顶自然。用于后续判断哪个卖点值得复拍。"></div>
             <div class="tt-field"><label title="发布状态。待发布用于排期，已发布用于复盘。">已发布</label><select id="videoPosted" title="是否已发布到TikTok。待发布记录会计入待发布统计。"><option value="0">待发布</option><option value="1">已发布</option></select></div>
@@ -300,7 +314,7 @@
 <script>
 var skuData = [
 {% for s in skus %}
-    {"id":{{ s.id }},"sku":{{ s.sku|tojson }},"product_name":{{ s.product_name|tojson }},"color":{{ s.color|tojson }},"length":{{ s.length|tojson }},"price":{{ s.price|tojson }},"product_cost":{{ s.product_cost|tojson }},"shipping_fee":{{ s.shipping_fee|tojson }},"platform_fee_rate":{{ s.platform_fee_rate|tojson }},"ad_cost":{{ s.ad_cost|tojson }},"return_rate":{{ s.return_rate|tojson }},"refund_loss":{{ s.refund_loss|tojson }},"stock":{{ s.stock|tojson }},"daily_sales":{{ s.daily_sales|tojson }},"lead_time_days":{{ s.lead_time_days|tojson }},"safety_stock":{{ s.safety_stock|tojson }},"status":{{ s.status|tojson }},"notes":{{ s.notes|tojson }}}{% if not loop.last %},{% endif %}
+    {"id":{{ s.id|tojson }},"sku":{{ s.sku|tojson }},"simple_sku":{{ s.simple_sku|tojson }},"tiktok_product_id":{{ s.tiktok_product_id|tojson }},"source":{{ s.source|tojson }},"label":{{ s.label|tojson }},"search_text":{{ s.search_text|tojson }},"product_name":{{ s.product_name|tojson }},"color":{{ s.color|tojson }},"length":{{ s.length|tojson }},"price":{{ s.price|tojson }},"product_cost":{{ s.product_cost|tojson }},"shipping_fee":{{ s.shipping_fee|tojson }},"platform_fee_rate":{{ s.platform_fee_rate|tojson }},"ad_cost":{{ s.ad_cost|tojson }},"return_rate":{{ s.return_rate|tojson }},"refund_loss":{{ s.refund_loss|tojson }},"stock":{{ s.stock|tojson }},"daily_sales":{{ s.daily_sales|tojson }},"lead_time_days":{{ s.lead_time_days|tojson }},"safety_stock":{{ s.safety_stock|tojson }},"status":{{ s.status|tojson }},"notes":{{ s.notes|tojson }}}{% if not loop.last %},{% endif %}
 {% endfor %}
 ];
 var videoData = [
@@ -342,13 +356,47 @@ async function saveSku(){
 }
 async function deleteSkuByIdx(idx){
     var s = skuData[idx]; if(!s) return;
+    if(!s.id){
+        showToast('这个SKU来自 TikTok SKUs表，请到 SKU映射 页面删除或修改');
+        return;
+    }
     if(!confirm('删除TikTok SKU "'+s.sku+'"?')) return;
     var r = await fetch('/api/tiktok/sku/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:s.id})});
     var d = await r.json();
     if(d.status === 'ok'){ location.reload(); } else { showToast('删除失败'); }
 }
 
-function quickScript(sku){ setVal('scriptSku', sku); setVal('scriptAngle', '整体效果'); generateScript(); }
+function findLocalSku(token){
+    var q = String(token || '').trim().toLowerCase();
+    if(!q) return null;
+    for(var i=0; i<skuData.length; i++){
+        var s = skuData[i];
+        var exact = [s.sku, s.simple_sku, s.tiktok_product_id, s.label].map(function(x){ return String(x || '').toLowerCase(); });
+        if(exact.indexOf(q) >= 0) return s;
+    }
+    for(var j=0; j<skuData.length; j++){
+        var t = String(skuData[j].search_text || '').toLowerCase();
+        if(t.indexOf(q) >= 0) return skuData[j];
+    }
+    return null;
+}
+function updateScriptSkuHint(){
+    var input = document.getElementById('scriptSku');
+    var hint = document.getElementById('scriptSkuHint');
+    if(!input || !hint) return;
+    var s = findLocalSku(input.value);
+    if(s){
+        hint.textContent = '匹配: ' + s.sku + ' / 简化 ' + (s.simple_sku || '-') + ' / 商品ID ' + (s.tiktok_product_id || '-') + ' / 来源 ' + (s.source || 'ops');
+        hint.style.color = '#27ae60';
+    }else if(input.value.trim()){
+        hint.textContent = '未找到精确匹配，生成时会按输入值尝试后端搜索';
+        hint.style.color = '#e67e22';
+    }else{
+        hint.textContent = '输入后会自动匹配 SKU 来源';
+        hint.style.color = '#888';
+    }
+}
+function quickScript(sku){ setVal('scriptSku', sku); updateScriptSkuHint(); setVal('scriptAngle', '整体效果'); generateScript(); }
 async function generateScript(){
     var sku = val('scriptSku');
     if(!sku){ showToast('先新增SKU'); return; }
@@ -356,6 +404,10 @@ async function generateScript(){
     var d = await r.json();
     if(d.status !== 'ok'){ showToast('生成失败'); return; }
     var s = d.script;
+    if(d.sku_info && d.sku_info.sku){
+        setVal('scriptSku', d.sku_info.sku);
+        updateScriptSkuHint();
+    }
     setVal('scriptVoiceover', s.voiceover + '\n\n8秒版: ' + s.short_voiceover);
     setVal('scriptCaption', '封面: ' + s.cover_text + '\n发布文案: ' + s.caption + '\n标签: ' + s.hashtags + '\n置顶评论: ' + s.pinned_comment);
 }
@@ -462,6 +514,15 @@ async function deleteVideoByIdx(idx){
 }
 document.addEventListener('keydown', function(e){
     if(e.key === 'Escape'){ closeSkuModal(); closeVideoModal(); }
+});
+document.addEventListener('DOMContentLoaded', function(){
+    var scriptSku = document.getElementById('scriptSku');
+    if(scriptSku){
+        if(!scriptSku.value && skuData.length > 0) scriptSku.value = skuData[0].sku || '';
+        scriptSku.addEventListener('input', updateScriptSkuHint);
+        scriptSku.addEventListener('change', updateScriptSkuHint);
+        updateScriptSkuHint();
+    }
 });
 </script>
 {% endblock %}

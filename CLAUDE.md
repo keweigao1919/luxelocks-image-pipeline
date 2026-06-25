@@ -232,6 +232,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 | 日期 | AI | 改动内容 |
 |------|-----|---------|
+| 2026-06-25 | Codex | 优化 TikTok Wig Ops 与 TikTok SKUs表联动：app.py 新增合并SKU候选/简化SKU/商品ID查找逻辑，TikTok SKUs映射保存时自动同步 tiktok_skus；templates/tiktok.html 脚本工厂支持输入完整SKU、简化SKU或TikTok商品ID并显示来源，SKU利润/补货表显示来源标签 |
 | 2026-06-25 | Codex | 新增 TikTok Videos 表导入页：app.py 添加 tiktok_video_performance 表、扩展 tiktok_videos 指标字段、完善 tiktok_sku_mapping 映射表/API、支持导入 TikTok Video Performance List xlsx 并同步到 Wig Ops 视频复盘；base.html 新增 /tiktok-videos 与 /tiktok-sku 入口；新增 tiktok_videos.html 与完善 tiktok_sku.html |
 | 2026-06-25 | Codex | 补全 TikTok Wig Ops 页面 hover 指导信息：templates/tiktok.html 为标题、统计卡、表头、数据行、脚本工厂、排期、视频复盘和弹窗字段增加 title，说明数据来源/计算逻辑/操作方法 |
 | 2026-06-25 | Codex | 新增 TikTok Wig Ops 中控模块：app.py 添加 tiktok_skus/tiktok_videos 表、利润/补货计算、脚本生成、7天排期、视频复盘API；templates/base.html 增加入口；新增 templates/tiktok.html 页面 |

@@ -958,6 +958,164 @@ def sync_perf_to_tiktok_videos(conn, item):
         """, data)
 
 
+def ensure_tiktok_ops_sku(conn, data):
+    sku = str(data.get("sku") or "").strip()
+    if not sku:
+        return
+    simple = str(data.get("simple_sku") or "").strip() or simplify_sku(sku)
+    existing = conn.execute("SELECT id FROM tiktok_skus WHERE sku=?", (sku,)).fetchone()
+    if existing:
+        conn.execute("""
+            UPDATE tiktok_skus SET
+                price=COALESCE(NULLIF(?, 0), price),
+                product_cost=COALESCE(NULLIF(?, 0), product_cost),
+                shipping_fee=COALESCE(NULLIF(?, 0), shipping_fee),
+                platform_fee_rate=COALESCE(NULLIF(?, 0), platform_fee_rate),
+                ad_cost=COALESCE(NULLIF(?, 0), ad_cost),
+                refund_loss=COALESCE(NULLIF(?, 0), refund_loss),
+                return_rate=COALESCE(NULLIF(?, 0), return_rate),
+                updated_at=CURRENT_TIMESTAMP
+            WHERE sku=?
+        """, (
+            safe_float(data.get("price")),
+            safe_float(data.get("product_cost")),
+            safe_float(data.get("shipping_fee")),
+            safe_float(data.get("platform_fee_rate"), 0.06),
+            safe_float(data.get("ad_cost")),
+            safe_float(data.get("refund_loss")),
+            safe_float(data.get("return_rate"), 0.20),
+            sku
+        ))
+    else:
+        conn.execute("""
+            INSERT INTO tiktok_skus
+                (sku, product_name, color, length, price, product_cost, shipping_fee,
+                 platform_fee_rate, ad_cost, return_rate, refund_loss, stock,
+                 daily_sales, lead_time_days, safety_stock, status, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 30, 10, 'testing', ?)
+        """, (
+            sku,
+            data.get("product_name", "") or f"TikTok SKU {simple}",
+            data.get("color", "") or "",
+            data.get("length", "") or "",
+            safe_float(data.get("price"), 23.99),
+            safe_float(data.get("product_cost")),
+            safe_float(data.get("shipping_fee")),
+            safe_float(data.get("platform_fee_rate"), 0.06),
+            safe_float(data.get("ad_cost")),
+            safe_float(data.get("return_rate"), 0.20),
+            safe_float(data.get("refund_loss")),
+            data.get("notes", "") or "来自 TikTok SKUs 表映射"
+        ))
+
+
+def get_tiktok_sku_options(conn):
+    """Merged SKU source for Wig Ops: ops SKUs + TikTok product mappings."""
+    ops_rows = conn.execute("SELECT * FROM tiktok_skus").fetchall()
+    options = {}
+    for row in ops_rows:
+        item = dict(row)
+        sku = item.get("sku") or ""
+        if not sku:
+            continue
+        simple = simplify_sku(sku)
+        item.update({
+            "simple_sku": simple,
+            "tiktok_product_id": "",
+            "source": "ops",
+            "label": f"{sku} ({simple})",
+            "search_text": f"{sku} {simple} {item.get('product_name') or ''} {item.get('color') or ''}"
+        })
+        options[sku] = item
+
+    map_rows = conn.execute("SELECT * FROM tiktok_sku_mapping ORDER BY COALESCE(simple_sku, sku), sku").fetchall()
+    product_names = {}
+    perf_rows = conn.execute("""
+        SELECT tiktok_product_id, product_name
+        FROM tiktok_video_performance
+        WHERE tiktok_product_id IS NOT NULL AND tiktok_product_id != ''
+        GROUP BY tiktok_product_id
+    """).fetchall()
+    for row in perf_rows:
+        product_names[str(row["tiktok_product_id"])] = row["product_name"] or ""
+
+    for row in map_rows:
+        m = dict(row)
+        sku = m.get("sku") or ""
+        if not sku:
+            continue
+        simple = m.get("simple_sku") or simplify_sku(sku)
+        product_id = str(m.get("tiktok_product_id") or "")
+        product_name = product_names.get(product_id, "")
+        if sku in options:
+            item = options[sku]
+            item["simple_sku"] = item.get("simple_sku") or simple
+            item["tiktok_product_id"] = product_id or item.get("tiktok_product_id", "")
+            item["source"] = "ops+mapping"
+            if product_name and (not item.get("product_name") or str(item.get("product_name")).startswith("TikTok SKU ")):
+                item["product_name"] = product_name
+            for key in ["price", "product_cost", "shipping_fee", "platform_fee_rate", "ad_cost", "refund_loss", "return_rate"]:
+                if safe_float(item.get(key)) == 0 and safe_float(m.get(key)) != 0:
+                    item[key] = m.get(key)
+        else:
+            item = {
+                "id": None,
+                "sku": sku,
+                "simple_sku": simple,
+                "tiktok_product_id": product_id,
+                "product_name": product_name or f"TikTok SKU {simple}",
+                "color": "",
+                "length": "",
+                "price": safe_float(m.get("price"), 23.99),
+                "product_cost": safe_float(m.get("product_cost")),
+                "shipping_fee": safe_float(m.get("shipping_fee")),
+                "platform_fee_rate": safe_float(m.get("platform_fee_rate"), 0.06),
+                "ad_cost": safe_float(m.get("ad_cost")),
+                "return_rate": safe_float(m.get("return_rate"), 0.20),
+                "refund_loss": safe_float(m.get("refund_loss")),
+                "stock": 0,
+                "daily_sales": 0,
+                "lead_time_days": 30,
+                "safety_stock": 10,
+                "status": "testing",
+                "notes": m.get("notes") or "来自 TikTok SKUs 表映射",
+                "source": "mapping",
+            }
+        item["label"] = f"{sku} ({simple})"
+        if item.get("tiktok_product_id"):
+            item["label"] += f" · TT {item['tiktok_product_id']}"
+        item["search_text"] = " ".join([
+            str(item.get("sku") or ""),
+            str(item.get("simple_sku") or ""),
+            str(item.get("tiktok_product_id") or ""),
+            str(item.get("product_name") or ""),
+            str(item.get("color") or "")
+        ])
+        options[sku] = item
+    return list(options.values())
+
+
+def find_tiktok_sku_info(conn, token):
+    token = str(token or "").strip()
+    if not token:
+        return None
+    lowered = token.lower()
+    options = get_tiktok_sku_options(conn)
+    for item in options:
+        candidates = [
+            str(item.get("sku") or ""),
+            str(item.get("simple_sku") or ""),
+            str(item.get("tiktok_product_id") or ""),
+            str(item.get("label") or "")
+        ]
+        if any(lowered == c.lower() for c in candidates if c):
+            return item
+    for item in options:
+        if lowered in str(item.get("search_text") or "").lower():
+            return item
+    return None
+
+
 # ────────────────────────────────────────
 # Shopify 连接器
 # ────────────────────────────────────────
@@ -2882,6 +3040,18 @@ async def tiktok_sku_mapping_save(request: Request):
                     notes=excluded.notes,
                     updated_at=CURRENT_TIMESTAMP
             """, values)
+        ensure_tiktok_ops_sku(conn, {
+            "sku": sku,
+            "simple_sku": simple,
+            "price": data.get("price"),
+            "product_cost": data.get("product_cost"),
+            "shipping_fee": data.get("shipping_fee"),
+            "platform_fee_rate": data.get("platform_fee_rate"),
+            "ad_cost": data.get("ad_cost"),
+            "refund_loss": data.get("refund_loss"),
+            "return_rate": data.get("return_rate"),
+            "notes": data.get("notes")
+        })
         conn.commit()
         return {"status": "ok"}
     except Exception as e:
@@ -3007,9 +3177,7 @@ async def tiktok_ops_page(request: Request):
     """TikTok 假发运营中控页面"""
     conn = get_db()
     try:
-        sku_rows = conn.execute(
-            "SELECT * FROM tiktok_skus ORDER BY updated_at DESC, id DESC"
-        ).fetchall()
+        sku_rows = get_tiktok_sku_options(conn)
         skus = []
         high_risk = 0
         main_push = 0
@@ -3067,6 +3235,19 @@ async def tiktok_ops_page(request: Request):
             default_accounts=", ".join(TIKTOK_DEFAULT_ACCOUNTS),
             angle_pool=TIKTOK_ANGLE_POOL
         )
+    finally:
+        conn.close()
+
+
+@app.get("/api/tiktok/sku-options")
+async def tiktok_sku_options(search: str = ""):
+    conn = get_db()
+    try:
+        options = get_tiktok_sku_options(conn)
+        if search:
+            s = search.lower()
+            options = [o for o in options if s in str(o.get("search_text") or "").lower()]
+        return {"status": "ok", "options": options[:200]}
     finally:
         conn.close()
 
@@ -3242,17 +3423,16 @@ async def tiktok_script_generate(request: Request):
     angle = data.get("video_angle", "整体效果").strip() or "整体效果"
     conn = get_db()
     try:
-        row = None
-        if sku:
-            row = conn.execute("SELECT * FROM tiktok_skus WHERE sku=?", (sku,)).fetchone()
-        info = dict(row) if row else {
-            "sku": sku,
-            "product_name": data.get("product_name", "").strip(),
-            "color": data.get("color", "").strip(),
-            "length": data.get("length", "").strip(),
-            "price": safe_float(data.get("price"), 23.99)
-        }
-        return {"status": "ok", "script": build_tiktok_script(info, angle)}
+        info = find_tiktok_sku_info(conn, sku) if sku else None
+        if not info:
+            info = {
+                "sku": sku,
+                "product_name": data.get("product_name", "").strip(),
+                "color": data.get("color", "").strip(),
+                "length": data.get("length", "").strip(),
+                "price": safe_float(data.get("price"), 23.99)
+            }
+        return {"status": "ok", "sku_info": info, "script": build_tiktok_script(info, angle)}
     finally:
         conn.close()
 
@@ -3272,14 +3452,16 @@ async def tiktok_schedule_generate(request: Request):
 
     conn = get_db()
     try:
-        params = []
-        query = "SELECT * FROM tiktok_skus WHERE status != 'paused'"
+        all_options = [o for o in get_tiktok_sku_options(conn) if o.get("status") != "paused"]
         if selected_skus:
-            placeholders = ",".join("?" for _ in selected_skus)
-            query += f" AND sku IN ({placeholders})"
-            params.extend(selected_skus)
-        query += " ORDER BY status='main' DESC, updated_at DESC LIMIT 20"
-        sku_rows = conn.execute(query, params).fetchall()
+            selected = {str(s) for s in selected_skus}
+            sku_rows = [
+                o for o in all_options
+                if str(o.get("sku")) in selected or str(o.get("simple_sku")) in selected or str(o.get("tiktok_product_id")) in selected
+            ]
+        else:
+            sku_rows = all_options
+        sku_rows = sorted(sku_rows, key=lambda o: (o.get("status") != "main", str(o.get("sku") or "")))[:20]
         rows = generate_tiktok_schedule(sku_rows, accounts, start_date, days, max_per_sku_per_day)
         if data.get("save"):
             for row in rows:
