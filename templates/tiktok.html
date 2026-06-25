@@ -11,6 +11,10 @@
 .tt-card-header { padding:14px 18px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:600; }
 .tt-card-body { padding:16px 18px; }
 .tt-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.tt-search-inline { display:flex; align-items:center; gap:8px; width:min(340px, 52vw); }
+.tt-search-inline input { width:100%; padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
+.tt-search-inline input:focus { outline:none; border-color:#3498db; }
+.tt-search-count { color:#888; font-size:12px; font-weight:500; white-space:nowrap; }
 .tt-table-wrap { overflow-x:auto; }
 .tt-table th { white-space:nowrap; }
 .tt-table td { vertical-align:middle; }
@@ -40,6 +44,7 @@
 .tt-schedule-box { max-height:360px; overflow:auto; border:1px solid #eee; border-radius:6px; }
 #ttOps [title] { cursor: help; }
 #ttOps button[title], #ttOps input[type="checkbox"][title] { cursor: pointer; }
+#ttOps input[type="search"][title] { cursor:text; }
 @media (max-width: 1100px) {
     .tt-grid { grid-template-columns:1fr; }
 }
@@ -68,7 +73,10 @@
     <div class="tt-card">
         <div class="tt-card-header">
             <span title="数据来源：tiktok_skus 运营表 + TikTok SKUs表。用途：如果SKU先在 TikTok SKUs表维护映射，会自动出现在这里；再补库存、日销、状态后，就能用于排期和利润补货判断。">SKU利润 / 补货</span>
-            <button class="btn btn-sm btn-primary" onclick="showSkuModal()" title="新增SKU到TikTok运营中控表">＋ 新增</button>
+            <div class="tt-search-inline" title="搜索范围：当前 SKU利润 / 补货 表内的完整SKU、简化SKU、TikTok商品ID、产品名、颜色和长度。">
+                <input id="skuProfitSearch" type="search" placeholder="SKU / 简化SKU / 商品ID" autocomplete="off" title="输入完整SKU、简化SKU或TikTok商品ID，实时过滤下方 SKU利润 / 补货 表。">
+                <span id="skuProfitSearchCount" class="tt-search-count" title="当前显示数量 / 表内SKU总数">{{ skus|length }}/{{ skus|length }}</span>
+            </div>
         </div>
         <div class="tt-card-body" style="padding:0">
             {% if skus %}
@@ -92,7 +100,7 @@
                     </thead>
                     <tbody>
                     {% for s in skus %}
-                    <tr>
+                    <tr class="sku-profit-row" data-search="{{ s.sku }} {{ s.simple_sku or '' }} {{ s.tiktok_product_id or '' }} {{ s.product_name or '' }} {{ s.color or '' }} {{ s.length or '' }}">
                         <td><input type="checkbox" class="schedule-sku" value="{{ s.sku }}" title="默认不勾选；手动勾选后才参与视频排期生成"></td>
                         <td title="SKU：{{ s.sku }}。简化SKU：{{ s.simple_sku or '-' }}。TikTok商品ID：{{ s.tiktok_product_id or '-' }}。用途：排期、脚本和复盘都会用这个SKU串联。"><strong style="color:#e94560">{{ s.sku }}</strong><div class="tt-muted">{{ s.simple_sku or '-' }} · {{ s.color or '-' }} {{ s.length or '' }}</div></td>
                         <td title="产品名：{{ s.product_name or '-' }}。建议写成运营能看懂的款式名，例如 24 inch brown highlight wig。">{{ s.product_name or '-' }}</td>
@@ -326,6 +334,22 @@ var videoData = [
 function val(id){ return document.getElementById(id).value; }
 function setVal(id, v){ document.getElementById(id).value = (v === null || v === undefined) ? '' : v; }
 
+function filterSkuProfitRows(){
+    var input = document.getElementById('skuProfitSearch');
+    var count = document.getElementById('skuProfitSearchCount');
+    var rows = document.querySelectorAll('.sku-profit-row');
+    if(!input) return;
+    var q = String(input.value || '').trim().toLowerCase();
+    var shown = 0;
+    rows.forEach(function(row){
+        var text = String(row.getAttribute('data-search') || '').toLowerCase();
+        var matched = !q || text.indexOf(q) >= 0;
+        row.style.display = matched ? '' : 'none';
+        if(matched) shown++;
+    });
+    if(count) count.textContent = shown + '/' + rows.length;
+}
+
 function showSkuModal(){
     document.getElementById('skuModalTitle').textContent = '新增SKU';
     ['skuId','skuCode','skuName','skuColor','skuLength','skuCost','skuShipping','skuAdCost','skuRefundLoss','skuStock','skuDailySales','skuNotes'].forEach(function(id){ setVal(id,''); });
@@ -516,6 +540,11 @@ document.addEventListener('keydown', function(e){
     if(e.key === 'Escape'){ closeSkuModal(); closeVideoModal(); }
 });
 document.addEventListener('DOMContentLoaded', function(){
+    var skuProfitSearch = document.getElementById('skuProfitSearch');
+    if(skuProfitSearch){
+        skuProfitSearch.addEventListener('input', filterSkuProfitRows);
+        filterSkuProfitRows();
+    }
     var scriptSku = document.getElementById('scriptSku');
     if(scriptSku){
         if(!scriptSku.value && skuData.length > 0) scriptSku.value = skuData[0].sku || '';
