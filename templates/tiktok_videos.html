@@ -85,8 +85,9 @@
                         <th title="发布时间：来自 TikTok 导出字段 发布时间。">发布时间</th>
                         <th title="达人：来自 达人昵称 和 达人ID。用于判断哪个账号/达人带货效果更好。">达人</th>
                         <th title="视频：来自 视频信息 和 视频ID。视频信息通常包含口播/发布文案/标签。">视频</th>
-                        <th title="商品：来自 商品 字段；系统会从末尾括号提取 TikTok商品ID。">商品</th>
+                        <th title="商品：来自 商品 字段。">商品</th>
                         <th title="SKU映射：来自 TikTok SKUs表。未映射会显示 TT-商品ID，建议补映射。">SKU</th>
+                        <th title="TikTok商品ID：19位数字，来自商品字段末尾括号提取，用于匹配 TikTok SKUs表。">商品ID</th>
                         <th title="VV：视频观看量。同步到 Wig Ops 的 views。">VV</th>
                         <th title="互动：点赞/评论/分享。用于判断内容互动强弱。">互动</th>
                         <th title="曝光/点击：商品曝光次数和商品点击次数。商品点击会同步到 Wig Ops 的 product_clicks。">曝光/点击</th>
@@ -103,11 +104,12 @@
                         <td title="发布时间原始值：{{ r.publish_time or '-' }}">{{ r.publish_time or '-' }}</td>
                         <td title="达人昵称：{{ r.creator_nickname or '-' }}；达人ID：{{ r.creator_id or '-' }}">{{ r.creator_nickname or '-' }}<div class="tv-muted">{{ r.creator_id or '-' }}</div></td>
                         <td class="tv-video" title="视频ID：{{ r.video_id or '-' }}；视频信息：{{ r.video_info or '-' }}"><strong>{{ r.video_id or '-' }}</strong><div class="tv-muted">{{ r.video_info or '-' }}</div></td>
-                        <td class="tv-product" title="商品名：{{ r.product_name or '-' }}；TikTok商品ID：{{ r.tiktok_product_id or '-' }}">{{ r.product_name or '-' }}<div class="tv-muted">{{ r.tiktok_product_id or '-' }}</div></td>
+                        <td class="tv-product" title="商品名：{{ r.product_name or '-' }}">{{ r.product_name or '-' }}</td>
                         <td title="映射结果：{{ r.sku or '-' }}。{% if r.sku and r.sku.startswith('TT-') %}这是未映射临时SKU，请去 TikTok SKUs表补商品ID映射。{% else %}这是已映射SKU，可与 Wig Ops SKU利润/库存对应。{% endif %}">
                             {% if r.sku and r.sku.startswith('TT-') %}<span class="tv-pill tv-pill-warn">{{ r.sku }}</span>{% else %}<span class="tv-pill tv-pill-ok">{{ r.sku or '-' }}</span>{% endif %}
                             <div class="tv-muted">{{ r.simple_sku or '-' }}</div>
                         </td>
+                        <td title="TikTok商品ID：{{ r.tiktok_product_id or '-' }}" style="font-family:monospace;font-size:12px">{{ r.tiktok_product_id or '-' }}</td>
                         <td title="VV：{{ r.vv or 0 }}。同步到 Wig Ops views。">{{ r.vv or 0 }}</td>
                         <td title="点赞 {{ r.likes_count or 0 }}；评论 {{ r.comments_count or 0 }}；分享 {{ r.shares_count or 0 }}。">👍{{ r.likes_count or 0 }}<br>💬{{ r.comments_count or 0 }}<br>↗{{ r.shares_count or 0 }}</td>
                         <td title="商品曝光 {{ r.product_impressions or 0 }}；商品点击 {{ r.product_clicks or 0 }}；引流次数 {{ r.product_redirects or 0 }}。">{{ r.product_impressions or 0 }} / <strong>{{ r.product_clicks or 0 }}</strong><div class="tv-muted">引流 {{ r.product_redirects or 0 }}</div></td>
