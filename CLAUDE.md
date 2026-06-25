@@ -1,6 +1,6 @@
 # LuxeLocks Hub - 唯一开发指南
 
-> **⚠️ 这是 Claude Code 和 Codex 共用的唯一权威文档。任何 AI 开始工作前必须先读此文件。**
+> **⚠️ 这是 Claude Code + Claude + Codex 三方共用的唯一权威文档。任何 AI 开始工作前必须先读此文件 + WORKING.md。**
 
 ---
 
@@ -167,12 +167,24 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 ---
 
-## 协作规则
+## 协作规则（Claude Code + Claude + Codex 三方）
 
-- **⚠️ 开发前先读此文件末尾的变更记录，了解最新状态**
-- **⚠️ 不要和另一个AI同时编辑同一个文件**
-- **⚠️ 每次改动后必须更新下方变更记录**
-- **⚠️ 改动后立即 git commit，让另一方可见**
+### 开始前（必须，否则撞车）
+1. **读 WORKING.md** → 看有没有人在干活。有人就等或做别的，没人就写上行查入
+2. **读本文件末尾变更记录** → 了解最新改动
+3. **git pull** → 拉最新代码
+4. **git add WORKING.md && git commit -m "checkin: <AI名> working on <任务>"**
+
+### 完成时（必须，否则别人不知道）
+1. **更新本文件末尾的 [变更记录]** — 格式: `| 日期 | AI名 | 改了什么, 涉及文件 |`
+2. **清除 WORKING.md 中自己的行**
+3. **git add -A && git commit -m "<AI名>: <改动摘要>"**
+4. **git push**（如果配置了远程仓库）
+
+### 禁止
+- 同时编辑同一个文件（通过 WORKING.md 避免）
+- 改了代码不更新变更记录
+- 改了代码不 git commit
 
 ---
 
@@ -180,5 +192,6 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 | 日期 | AI | 改动内容 |
 |------|-----|---------|
+| 2026-06-25 | Claude Code | 三方协作基建: 创建 WORKING.md 活动看板, 更新 CLAUDE.md 协作规则支持 Claude+Codex+ClaudeCode 三方, 更新 AGENTS.md 指向 WORKING.md, git init 就绪 |
 | 2026-06-25 | Codex | 补齐协作基建：新增 memory/MEMORY.md 指向 CLAUDE.md，新增 .gitignore 避免提交 venv/日志/数据库，并准备初始化 git 提交流程 |
 | 2025-06-19 | Claude Code | 初始创建本文件，统一开发指南 |
