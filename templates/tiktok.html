@@ -93,7 +93,7 @@
                     <tbody>
                     {% for s in skus %}
                     <tr>
-                        <td><input type="checkbox" class="schedule-sku" value="{{ s.sku }}" checked title="勾选后参与视频排期生成"></td>
+                        <td><input type="checkbox" class="schedule-sku" value="{{ s.sku }}" title="默认不勾选；手动勾选后才参与视频排期生成"></td>
                         <td title="SKU：{{ s.sku }}。简化SKU：{{ s.simple_sku or '-' }}。TikTok商品ID：{{ s.tiktok_product_id or '-' }}。用途：排期、脚本和复盘都会用这个SKU串联。"><strong style="color:#e94560">{{ s.sku }}</strong><div class="tt-muted">{{ s.simple_sku or '-' }} · {{ s.color or '-' }} {{ s.length or '' }}</div></td>
                         <td title="产品名：{{ s.product_name or '-' }}。建议写成运营能看懂的款式名，例如 24 inch brown highlight wig。">{{ s.product_name or '-' }}</td>
                         <td title="售价来源：SKU弹窗 price 字段。用于利润和脚本价格话术。">${{ '%.2f'|format(s.price or 0) }}</td>
