@@ -3116,9 +3116,9 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
             )
             params.extend([st, st, st, st, st, st, st])
         if mapped == "mapped":
-            where.append("sku NOT LIKE 'TT-%'")
+            where.append("simple_sku != ''")
         elif mapped == "unmapped":
-            where.append("sku LIKE 'TT-%'")
+            where.append("simple_sku = ''")
         where_clause = " AND ".join(where)
 
         # 总数
@@ -3137,7 +3137,7 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
         stats = conn.execute("""
             SELECT
                 COUNT(*) as total,
-                SUM(CASE WHEN sku LIKE 'TT-%' THEN 1 ELSE 0 END) as unmapped,
+                SUM(CASE WHEN simple_sku IS NULL OR simple_sku = '' THEN 1 ELSE 0 END) as unmapped,
                 SUM(vv) as views,
                 SUM(product_clicks) as clicks,
                 SUM(attributed_sku_orders) as orders,

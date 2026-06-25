@@ -42,7 +42,7 @@
 <div class="stats col4">
     <div class="stat-card" title="数据来源：tiktok_video_performance 表。含义：已导入的视频-商品表现行数；同一视频挂多个商品时可能有多行。"><div class="label">视频表现行</div><div class="value">{{ stats.total or 0 }}</div></div>
     <div class="stat-card" title="映射逻辑：商品字段末尾括号里的 TikTok商品ID 能在 TikTok SKUs表找到 SKU 时，计为已映射。"><div class="label">已映射</div><div class="value" style="color:#27ae60">{{ stats.mapped or 0 }}</div></div>
-    <div class="stat-card" title="未映射逻辑：找不到 TikTok商品ID ↔ SKU 映射时，系统会用 TT-商品ID 临时占位。建议去 TikTok SKUs表补映射。"><div class="label">未映射</div><div class="value" style="color:#e67e22">{{ stats.unmapped or 0 }}</div></div>
+    <div class="stat-card" title="未映射逻辑：tiktok_product_id 在 TikTok SKUs 表找不到对应 simple_sku。建议去补录映射。"><div class="label">未映射</div><div class="value" style="color:#e67e22">{{ stats.unmapped or 0 }}</div></div>
     <div class="stat-card" title="计算逻辑：总商品点击 / 总VV × 100%。用于整体判断视频是否能把观看转成商品兴趣。"><div class="label">整体CTR</div><div class="value" style="color:#3498db">{{ stats.ctr or 0 }}%</div></div>
 </div>
 
@@ -105,8 +105,8 @@
                         <td title="达人昵称：{{ r.creator_nickname or '-' }}；达人ID：{{ r.creator_id or '-' }}">{{ r.creator_nickname or '-' }}<div class="tv-muted">{{ r.creator_id or '-' }}</div></td>
                         <td class="tv-video" title="视频ID：{{ r.video_id or '-' }}；视频信息：{{ r.video_info or '-' }}"><strong>{{ r.video_id or '-' }}</strong><div class="tv-muted">{{ r.video_info or '-' }}</div></td>
                         <td class="tv-product" title="商品名：{{ r.product_name or '-' }}">{{ r.product_name or '-' }}</td>
-                        <td title="映射结果：{{ r.sku or '-' }}。{% if r.sku and r.sku.startswith('TT-') %}这是未映射临时SKU，请去 TikTok SKUs表补商品ID映射。{% else %}这是已映射SKU，可与 Wig Ops SKU利润/库存对应。{% endif %}">
-                            {% if r.sku and r.sku.startswith('TT-') %}<span class="tv-pill tv-pill-warn">{{ r.sku }}</span>{% else %}<span class="tv-pill tv-pill-ok">{{ r.sku or '-' }}</span>{% endif %}
+                        <td title="映射结果：{{ r.sku or '未映射' }}。{% if r.sku %}已映射到 simple_sku，可与 Wig Ops SKU利润/库存对应。{% else %}该商品ID未在 TikTok SKUs表建立映射，请去补录。{% endif %}">
+                            {% if r.sku %}<span class="tv-pill tv-pill-ok">{{ r.sku }}</span>{% else %}<span class="tv-pill tv-pill-warn">未映射</span>{% endif %}
                             <div class="tv-muted">{{ r.simple_sku or '-' }}</div>
                         </td>
                         <td title="TikTok商品ID：{{ r.tiktok_product_id or '-' }}" style="font-family:monospace;font-size:12px">{{ r.tiktok_product_id or '-' }}</td>
