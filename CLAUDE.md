@@ -192,6 +192,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 | 日期 | AI | 改动内容 |
 |------|-----|---------|
+| 2026-06-25 | Codex | 补齐三方入口文档：memory/MEMORY.md 与 .cursorrules 均要求先读 WORKING.md + CLAUDE.md，避免 Claude/Claude Code/Codex 漏看实时看板 |
 | 2026-06-25 | Claude Code | 三方协作基建: 创建 WORKING.md 活动看板, 更新 CLAUDE.md 协作规则支持 Claude+Codex+ClaudeCode 三方, 更新 AGENTS.md 指向 WORKING.md, git init 就绪 |
 | 2026-06-25 | Codex | 补齐协作基建：新增 memory/MEMORY.md 指向 CLAUDE.md，新增 .gitignore 避免提交 venv/日志/数据库，并准备初始化 git 提交流程 |
 | 2025-06-19 | Claude Code | 初始创建本文件，统一开发指南 |

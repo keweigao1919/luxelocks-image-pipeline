@@ -1,4 +1,7 @@
-# Cursor Rules → 请先读 CLAUDE.md
+# Cursor Rules → 请先读 WORKING.md + CLAUDE.md
 
-本项目使用 `CLAUDE.md` 作为 Claude Code 和 Codex 的共用开发指南。
-开始工作前请阅读 `CLAUDE.md` 获取完整的数据库结构、业务逻辑和开发约定。
+本项目使用 `CLAUDE.md` 作为 Claude Code、Claude 和 Codex 的唯一权威开发指南。
+本项目使用 `WORKING.md` 作为三方实时活动看板。
+
+开始工作前请先阅读 `WORKING.md`，确认没有人正在编辑冲突文件；再阅读 `CLAUDE.md` 获取完整的数据库结构、业务逻辑、协作规则和末尾变更记录。
+完成工作后必须更新 `CLAUDE.md` 变更记录，清除 `WORKING.md` 中自己的行，并 git commit。
