@@ -1,0 +1,203 @@
+﻿{% extends "base.html" %}
+{% block title %}跨境在线{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:12px">🌐 跨境在线</h2>
+
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+    <div style="flex:1"></div>
+    <button class="btn btn-sm" style="background:#888;color:#fff" onclick="document.getElementById('fileInput').click()">📥 导入xlsx</button>
+    <input type="file" id="fileInput" accept=".xlsx" style="display:none" onchange="importFile(this)">
+    <button class="btn btn-sm" style="background:#ff9800;color:#fff" onclick="syncOMS()">📡 同步OMS</button>
+    <button class="btn btn-primary btn-sm" onclick="showAddRow()">➕ 新增SKU</button>
+    {% if items %}
+    <button class="btn btn-sm" style="background:#e53935;color:#fff" onclick="clearAll()">🗑 清空</button>
+    {% endif %}
+</div>
+
+<!-- 新增行（默认隐藏） -->
+<div id="addRow" style="display:none;padding:12px 20px;background:#f0f7ff;border-radius:8px;margin-bottom:16px;display:none;align-items:center;gap:8px">
+    <input id="newSku" class="search-box" placeholder="SKU 如 SWLC1261-1BR24" style="flex:2">
+    <input id="newAvail" class="search-box" placeholder="可用库存" style="width:100px" type="number" value="0">
+    <input id="newTransit" class="search-box" placeholder="在途库存" style="width:100px" type="number" value="0">
+    <button class="btn btn-primary btn-sm" onclick="addSku()">✅ 添加</button>
+    <button class="btn btn-sm" style="background:#eee" onclick="hideAddRow()">取消</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        SKU列表 ({{ items|length }} 条)
+        <span style="font-size:12px;color:#888;font-weight:400">手动维护 · 同步到产品页</span>
+    </div>
+    <div class="card-body">
+        {% if items %}
+        <table>
+            <thead><tr>
+                <th>SKU</th>
+                <th style="color:#2196f3;white-space:nowrap">
+                    可用库存
+                    <a href="?sort=available&order=asc" style="text-decoration:none;color:{% if sort=='available' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">▲</a>
+                    <a href="?sort=available&order=desc" style="text-decoration:none;color:{% if sort=='available' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">▼</a>
+                </th>
+                <th style="color:#ff9800;white-space:nowrap">
+                    在途库存
+                    <a href="?sort=transit&order=asc" style="text-decoration:none;color:{% if sort=='transit' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">▲</a>
+                    <a href="?sort=transit&order=desc" style="text-decoration:none;color:{% if sort=='transit' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">▼</a>
+                </th>
+                <th style="width:80px">操作</th>
+            </tr></thead>
+            <tbody>
+            {% for item in items %}
+            <tr id="row{{ item.id }}">
+                <td><strong>{{ item.reference_code or '-' }}</strong></td>
+                <td style="color:#2196f3;font-weight:600;font-size:15px" class="val-avail">{{ item.available_inventory }}</td>
+                <td style="color:#ff9800;font-weight:600;font-size:15px" class="val-transit">{{ item.in_transit_total }}</td>
+                <td>
+                    <button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#eee" onclick="editRow({{ item.id }}, '{{ item.reference_code }}', {{ item.available_inventory }}, {{ item.in_transit_total }})" title="编辑">✏️</button>
+                    <button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#e53935;color:#fff" onclick="delRow({{ item.id }})" title="删除">✕</button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+            {% if totals %}
+            <tfoot>
+            <tr style="background:#f5f6fa;font-weight:700;border-top:2px solid #333">
+                <td style="text-align:right;font-size:14px;color:#333">📊 总计</td>
+                <td style="color:#2196f3;font-size:14px">{{ totals.available }}</td>
+                <td style="color:#ff9800;font-size:14px">{{ totals.transit }}</td>
+                <td></td>
+            </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+        {% else %}
+        <div class="empty">
+            <p>暂无SKU</p>
+            <p style="font-size:13px;color:#888">点「➕ 新增SKU」手动添加，或「📥 导入xlsx」批量导入</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 编辑弹窗 -->
+<div id="editModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;justify-content:center;align-items:center">
+    <div style="background:white;border-radius:8px;padding:24px;max-width:400px;width:90%">
+        <h3>编辑 SKU</h3>
+        <input type="hidden" id="editId">
+        <div style="margin-top:12px">
+            <label style="font-size:13px;font-weight:600">SKU</label>
+            <input id="editSku" class="search-box" style="width:100%;margin-top:4px">
+        </div>
+        <div style="margin-top:12px">
+            <label style="font-size:13px;font-weight:600">可用库存</label>
+            <input id="editAvail" class="search-box" style="width:100%;margin-top:4px" type="number">
+        </div>
+        <div style="margin-top:12px">
+            <label style="font-size:13px;font-weight:600">在途库存</label>
+            <input id="editTransit" class="search-box" style="width:100%;margin-top:4px" type="number">
+        </div>
+        <div style="margin-top:20px;text-align:right">
+            <button class="btn" style="background:#eee" onclick="closeEdit()">取消</button>
+            <button class="btn btn-primary" onclick="saveEdit()">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddRow(){ document.getElementById('addRow').style.display='flex'; document.getElementById('newSku').focus(); }
+function hideAddRow(){ document.getElementById('addRow').style.display='none'; }
+function closeEdit(){ document.getElementById('editModal').style.display='none'; }
+
+async function addSku(){
+    var sku=document.getElementById('newSku').value.trim();
+    if(!sku){ showToast('SKU必填'); return; }
+    var avail=parseInt(document.getElementById('newAvail').value)||0;
+    var transit=parseInt(document.getElementById('newTransit').value)||0;
+    try{
+        var r=await fetch('/api/inventory/cross-border/add',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({sku:sku,available:avail,transit:transit})
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+function editRow(id, sku, avail, transit){
+    document.getElementById('editId').value=id;
+    document.getElementById('editSku').value=sku;
+    document.getElementById('editAvail').value=avail;
+    document.getElementById('editTransit').value=transit;
+    document.getElementById('editModal').style.display='flex';
+}
+
+async function saveEdit(){
+    var id=document.getElementById('editId').value;
+    var sku=document.getElementById('editSku').value.trim();
+    var avail=parseInt(document.getElementById('editAvail').value)||0;
+    var transit=parseInt(document.getElementById('editTransit').value)||0;
+    if(!sku){ showToast('SKU必填'); return; }
+    try{
+        var r=await fetch('/api/inventory/cross-border/update',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:id,sku:sku,available:avail,transit:transit})
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function delRow(id){
+    if(!confirm('删除此SKU?')) return;
+    try{
+        var r=await fetch('/api/inventory/cross-border/delete',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:id})
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function clearAll(){
+    if(!confirm('确定清空跨境在线全部SKU?')) return;
+    try{
+        var r=await fetch('/api/inventory/clear',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({warehouse:'CrossBorder'})
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function syncOMS(){
+    showToast('从领星OMS同步中...',5000);
+    try{
+        var r=await fetch('/api/inventory/sync-cross-border',{method:'POST'});
+        var d=await r.json();
+        if(d.status==='ok'){ showToast('OMS同步: '+d.total_rows+' 条 → '+d.synced+' SKU'); setTimeout(function(){location.reload()},1500); }
+        else{ showToast('失败: '+(d.message||'')); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function importFile(input){
+    var file=input.files[0];
+    if(!file||!file.name.endsWith('.xlsx')){ showToast('请上传.xlsx'); return; }
+    showToast('导入中...',5000);
+    var form=new FormData();
+    form.append('file',file);
+    form.append('warehouse','CrossBorder');
+    try{
+        var r=await fetch('/api/inventory/import',{method:'POST',body:form});
+        var d=await r.json();
+        if(d.status==='ok'){ showToast('导入: '+d.total_rows+' 行 → '+d.imported+' SKU'); setTimeout(function(){location.reload()},1500); }
+        else{ showToast('失败: '+(d.message||'')); }
+    }catch(e){ showToast('出错: '+e.message); }
+    input.value='';
+}
+</script>
+{% endblock %}

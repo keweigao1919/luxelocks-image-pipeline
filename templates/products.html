@@ -1,0 +1,218 @@
+﻿{% extends "base.html" %}
+{% block title %}产品管理{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:12px">产品管理</h2>
+
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+    <input id="skuSearch" class="search-box" placeholder="搜索简化SKU，如 1261-4" title="输入简化SKU如 1261-4 搜索 | 匹配SKU字段模糊查询" value="{{ search or '' }}" style="width:200px" onkeydown="if(event.key==='Enter')doSearch()">
+    <select id="statusFilter" class="search-box" title="筛选产品状态：在售/草稿/归档 | 数据来源：Shopify产品状态" style="width:110px;padding:7px 10px" onchange="doFilter()">
+        <option value="all" {% if not status or status=='all' %}selected{% endif %}>全部状态</option>
+        <option value="active" {% if status=='active' %}selected{% endif %}>在售</option>
+        <option value="draft" {% if status=='draft' %}selected{% endif %}>草稿</option>
+        <option value="archived" {% if status=='archived' %}selected{% endif %}>归档</option>
+    </select>
+    <button class="btn btn-sm" style="background:#555;color:#fff" onclick="doSearch()" title="根据简化SKU模糊搜索产品 | 匹配SKU字段">搜索</button>
+    {% if search or status %}<a href="/products" class="btn btn-sm" style="background:#eee">清除</a>{% endif %}
+    <div style="flex:1"></div>
+    <button class="btn btn-sm" style="background:#ff9800;color:#fff" onclick="syncOMS()" title="数据来源：领星OMS integratedInventory API | 同步跨境仓可用库存+在途到产品列表">📡 同步领星OMS</button>
+    <button class="btn btn-sm" style="background:#27ae60;color:#fff" onclick="pushToShopify()" id="pushShopifyBtn" title="将跨境在线库存可用同步到Shopify库存 | 仅更新有跨境库存的SKU，无库存的跳过">📤 同步Shopify库存</button>
+    <button class="btn btn-primary btn-sm" onclick="syncProducts()" title="数据来源：Shopify Product API | 拉取最新产品、变体SKU、价格、库存到本地">同步产品</button>
+    <button class="btn btn-sm" style="background:#e53935;color:#fff" onclick="clearProducts()" title="清空本地产品表所有数据 | 操作不可逆，清空后需重新同步">清空</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        产品列表 ({{ products|length if products else 0 }} SKU)
+        {% if search %}<span style="font-size:13px;color:#888"> - 搜索: "{{ search }}"</span>{% endif %}
+    </div>
+    <div class="card-body">
+        {% if products %}
+        <table>
+            <thead><tr>
+<th>SKU</th><th>简化SKU</th><th>图片</th><th>品名</th><th>规格</th><th>价格</th><th>状态</th>
+<th style="white-space:nowrap">
+    Shopify库存
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=shopify&order=asc" style="text-decoration:none;color:{% if sort=='shopify' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=shopify&order=desc" style="text-decoration:none;color:{% if sort=='shopify' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
+</th>
+<th style="white-space:nowrap">
+    跨境在线库存可用
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=cross_avail&order=asc" style="text-decoration:none;color:{% if sort=='cross_avail' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=cross_avail&order=desc" style="text-decoration:none;color:{% if sort=='cross_avail' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
+</th>
+<th style="white-space:nowrap">
+    跨境在线库存在途
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=cross_transit&order=asc" style="text-decoration:none;color:{% if sort=='cross_transit' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=cross_transit&order=desc" style="text-decoration:none;color:{% if sort=='cross_transit' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
+</th>
+<th style="color:#8e44ad;white-space:nowrap">LuxeLocks<br>可用
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=luxe_avail&order=asc" style="text-decoration:none;color:{% if sort=='luxe_avail' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=luxe_avail&order=desc" style="text-decoration:none;color:{% if sort=='luxe_avail' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
+</th>
+<th style="color:#8e44ad;white-space:nowrap">LuxeLocks<br>在途
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=luxe_transit&order=asc" style="text-decoration:none;color:{% if sort=='luxe_transit' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=luxe_transit&order=desc" style="text-decoration:none;color:{% if sort=='luxe_transit' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
+</th>
+<th style="color:#e67e22;white-space:nowrap">Veloura<br>可用
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=veloura_avail&order=asc" style="text-decoration:none;color:{% if sort=='veloura_avail' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=veloura_avail&order=desc" style="text-decoration:none;color:{% if sort=='veloura_avail' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
+</th>
+<th style="color:#e67e22;white-space:nowrap">Veloura<br>在途
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=veloura_transit&order=asc" style="text-decoration:none;color:{% if sort=='veloura_transit' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
+    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=veloura_transit&order=desc" style="text-decoration:none;color:{% if sort=='veloura_transit' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
+</th><th>操作</th></tr></thead><tbody>
+            {% for p in products %}
+            <tr>
+                <td style="font-size:11px;color:#888">{{ p.sku or '-' }}</td>
+                <td><strong style="color:#e94560">{{ p.simple_sku or '-' }}</strong></td>
+                <td>
+                    {% if p.image_url %}
+                    <img src="/api/img/proxy?url={{ p.image_url | urlencode }}" style="width:48px;height:48px;object-fit:cover;border-radius:4px;cursor:pointer;border:1px solid #eee" onclick="previewImage('{{ p.image_url }}')" title="点击查看产品大图 | 图片来源于Shopify CDN" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-block'">
+                    {% endif %}
+                    <button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#eee;display:{% if p.image_url %}none{% else %}inline-block{% endif %}" onclick="uploadImage('{{ p.sku }}', '{{ p.platform_product_id }}')">+图</button>
+                </td>
+                <td>{{ p.title }}</td>
+                <td>{{ p.variant_title or '-' }}</td>
+                <td>${{ p.price }}</td>
+                <td>
+                    {% if p.product_status == 'active' %}
+                    <span class="badge badge-shipped">在售</span>
+                    {% elif p.product_status == 'draft' %}
+                    <span class="badge badge-pending">草稿</span>
+                    {% elif p.product_status == 'archived' %}
+                    <span class="badge badge-cancelled">归档</span>
+                    {% else %}
+                    <span class="badge badge-info">{{ p.product_status or 'active' }}</span>
+                    {% endif %}
+                </td>
+                <td style="{% if p.inventory_quantity < 10 %}color:#e53935;font-weight:600{% endif %}">{{ p.inventory_quantity }}</td>
+                <td style="color:#2196f3;font-weight:600">{{ p.cross_available or 0 }}</td>
+                <td style="color:#ff9800;font-weight:600">{{ p.cross_transit or 0 }}</td>
+                <td style="color:#8e44ad;font-weight:600">{{ p.luxe_available or 0 }}</td>
+                <td style="color:#8e44ad;font-weight:600">{{ p.luxe_transit or 0 }}</td>
+                <td style="color:#e67e22;font-weight:600">{{ p.veloura_available or 0 }}</td>
+                <td style="color:#e67e22;font-weight:600">{{ p.veloura_transit or 0 }}</td><td><a href="/procurement?import={{ p.simple_sku }}" <a href="/procurement?import={{ p.simple_sku }}" class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#f39c12;color:#fff;text-decoration:none;white-space:nowrap;margin-right:2px" title="跳转到采购资源信息池 | 自动带入该产品简化SKU和图片">🛒采购</a><button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#3498db;color:#fff;border:none;cursor:pointer;white-space:nowrap" title="查看本地素材 | 毫秒级搜索本地文件" onclick="event.stopPropagation();showMedia(&quot;{{ p.simple_sku }}&quot;)">📷素材</button></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+            {% if totals %}
+            <tfoot>
+            <tr style="background:#f5f6fa;font-weight:700;border-top:2px solid #333">
+                <td colspan="7" style="text-align:right;font-size:14px;color:#333">总计</td>
+                <td style="font-size:14px;{% if totals.shopify < 100 %}#e53935{% endif %}">{{ totals.shopify }}</td>
+                <td style="color:#2196f3;font-size:14px">{{ totals.cross_available }}</td>
+                <td style="color:#ff9800;font-size:14px">{{ totals.cross_transit }}</td>
+                <td style="color:#8e44ad;font-size:14px">{{ totals.luxe_available }}</td>
+                <td style="color:#8e44ad;font-size:14px">{{ totals.luxe_transit }}</td>
+                <td style="color:#e67e22;font-size:14px">{{ totals.veloura_available }}</td>
+                <td style="color:#e67e22;font-size:14px">{{ totals.veloura_transit }}</td>
+                <td></td>
+                <td></td>
+            </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+        {% else %}
+        <div class="empty"><p>暂无产品，请先同步</p><br><button class="btn btn-primary" onclick="syncProducts()">同步产品</button></div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="imageModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;justify-content:center;align-items:center" onclick="closePreview()">
+    <img id="previewImg" style="max-width:90%;max-height:90%;border-radius:8px;box-shadow:0 4px 30px rgba(0,0,0,0.5)">
+</div>
+<div id="uploadModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;justify-content:center;align-items:center">
+    <div style="background:white;border-radius:8px;padding:24px;max-width:400px;width:90%">
+        <h3>上传产品图片</h3>
+        <p style="font-size:13px;color:#888;margin:8px 0" id="uploadSkuLabel"></p>
+        <input id="imageUrlInput" class="search-box" placeholder="粘贴图片URL" style="width:100%">
+        <div style="margin-top:12px;text-align:right">
+            <button class="btn" style="background:#eee" onclick="closeUpload()">取消</button>
+            <button class="btn btn-primary" onclick="saveImage()">保存</button>
+        </div>
+    </div>
+</div>
+<!-- 素材预览弹窗 -->
+<div class="modal-overlay" id="mediaModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;align-items:center;justify-content:center" onclick="if(event.target===this)closeMedia()">
+    <div style="background:white;border-radius:8px;padding:24px;max-width:800px;width:95%;max-height:90vh;overflow-y:auto">
+        <h3 id="mediaTitle">📷 本地素材</h3>
+        <div id="mediaGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;max-height:500px;overflow-y:auto"></div>
+        <div id="mediaEmpty" style="text-align:center;padding:30px;color:#999;display:none"></div>
+        <div style="margin-top:12px;text-align:right">
+            <button class="btn" style="background:#eee" onclick="closeMedia()">关闭</button>
+            <button class="btn" style="background:#3498db;color:#fff" onclick="window.open('/media','_blank')" id="openMediaBtn" disabled>📁 打开素材管理器</button>
+        </div>
+    </div>
+</div>
+<script>
+async function pushToShopify(){
+    var btn=document.getElementById('pushShopifyBtn');
+    btn.disabled=true; btn.textContent='⏳ 同步中...';
+    showToast('正在将跨境库存同步到Shopify...',10000);
+    try{
+        var r=await fetch('/api/inventory/push-to-shopify',{method:'POST'});
+        var d=await r.json();
+        if(d.status==='ok'){ showToast(d.message); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+    btn.disabled=false; btn.textContent='📤 同步Shopify库存';
+}
+async function syncOMS(){
+    showToast('从领星OMS同步跨境库存...',5000);
+    try{
+        var r=await fetch('/api/inventory/sync-cross-border',{method:'POST'});
+        var d=await r.json();
+        if(d.status==='ok'){
+            showToast('OMS同步完成: '+d.total_rows+' 条 → '+d.synced+' SKU');
+            setTimeout(function(){location.reload()},1500);
+        }else{ showToast('失败: '+(d.message||'')); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+async function syncProducts(){
+    showToast('同步中...',5000);
+    try{
+        var r=await fetch('/api/sync/products',{method:'POST'});
+        var d=await r.json();
+        var msg = '同步: '+(d.synced||0)+' 个产品';
+        if(d.deleted>0) msg += ', 删除: '+d.deleted;
+        showToast(msg);
+        setTimeout(function(){location.reload()},1500);
+    }catch(e){ showToast('失败: '+e.message); }
+}
+async function clearProducts(){
+    if(!confirm('确认清空所有本地产品数据？\n\n不会影响 Shopify 上的产品。\n清空后请点「同步产品」重新拉取。')) return;
+    showToast('清空中...',3000);
+    try{
+        var r=await fetch('/api/products/clear',{method:'POST'});
+        var d=await r.json();
+        if(d.status==='ok'){
+            showToast('已清空 '+d.deleted+' 条，请点同步产品');
+            setTimeout(function(){location.reload()},1000);
+        }else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+function previewImage(url){ document.getElementById('previewImg').src=url; document.getElementById('imageModal').style.display='flex'; }
+function closePreview(){ document.getElementById('imageModal').style.display='none'; }
+var currentUploadSku=''; var currentUploadPid='';
+function uploadImage(sku, pid){ currentUploadSku=sku; currentUploadPid=pid; document.getElementById('uploadSkuLabel').textContent='SKU: '+sku; document.getElementById('uploadModal').style.display='flex'; document.getElementById('imageUrlInput').value=''; document.getElementById('imageUrlInput').focus(); }
+function closeUpload(){ document.getElementById('uploadModal').style.display='none'; }
+async function saveImage(){ var url=document.getElementById('imageUrlInput').value.trim(); if(!url)return; showToast('保存中...',3000); try{ var r=await fetch('/api/product/image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku:currentUploadSku,platform_product_id:currentUploadPid,image_url:url})}); var d=await r.json(); if(d.status==='ok'){closeUpload();location.reload();}else{showToast('失败:'+d.message);} }catch(e){ showToast('出错:'+e.message); } }
+function doSearch(){ var q=document.getElementById('skuSearch').value.trim(); var s=document.getElementById('statusFilter').value; window.location.href='/products?search='+encodeURIComponent(q)+'&status='+encodeURIComponent(s)+'&t='+Date.now(); }
+function doFilter(){ var q=document.getElementById('skuSearch').value.trim(); var s=document.getElementById('statusFilter').value; window.location.href='/products?search='+encodeURIComponent(q)+'&status='+encodeURIComponent(s); }
+// 素材预览（毫秒级，加载缓存树后直接过滤）
+async function showMedia(sku){
+    document.getElementById('mediaTitle').textContent='📷 素材: '+sku;
+    document.getElementById('mediaGrid').innerHTML='<div style="text-align:center;padding:30px;color:#999">⏳ 搜索中...</div>';
+    document.getElementById('mediaEmpty').style.display='none';
+    document.getElementById('openMediaBtn').disabled=true;
+    document.getElementById('mediaModal').style.display='flex';
+    try{ var r=await fetch('/api/media/by-sku?sku='+encodeURIComponent(sku)); var d=await r.json();
+        var g=document.getElementById('mediaGrid');
+        if(d.status==='ok'&&d.images.length>0){ document.getElementById('openMediaBtn').disabled=false;
+            var h=''; for(var i=0;i<d.images.length;i++){ var u='/api/media/preview?path='+encodeURIComponent(d.images[i]); h+='<div style="border:1px solid #eee;border-radius:6px;overflow:hidden;cursor:pointer" onclick="window.open(\''+u+'\',\'_blank\')"><img src="'+u+'" style="width:100%;height:120px;object-fit:cover" loading="lazy" onerror="this.parentElement.innerHTML=\'<div style=height:120px;display:flex;align-items:center;justify-content:center;color:#999>📄</div>\'"><div style="padding:4px 6px;font-size:10px;color:#666">'+d.images[i].split('/').pop()+'</div></div>'; } g.innerHTML=h;
+        } else { g.innerHTML=''; document.getElementById('mediaEmpty').style.display='block'; document.getElementById('mediaEmpty').textContent='📭 本地未找到 SKU '+sku+' 的素材'; }
+    }catch(e){ document.getElementById('mediaGrid').innerHTML=''; document.getElementById('mediaEmpty').style.display='block'; document.getElementById('mediaEmpty').textContent='出错: '+e.message; }
+}
+function closeMedia(){ document.getElementById('mediaModal').style.display='none'; }
+</script>
+{% endblock %}

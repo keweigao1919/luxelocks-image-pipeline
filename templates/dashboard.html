@@ -1,0 +1,107 @@
+﻿{% extends "base.html" %}
+{% block title %}看板{% endblock %}
+{% block content %}
+
+<div class="stats">
+    <div class="stat-card">
+        <div class="label">今日订单</div>
+        <div class="value today">{{ stats.today }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">待处理</div>
+        <div class="value pending">{{ stats.pending }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">已发货</div>
+        <div class="value shipped">{{ stats.shipped }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">总计订单</div>
+        <div class="value total">{{ stats.total }}</div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        最近订单
+        <a href="/orders" style="font-size:13px;color:#3498db;text-decoration:none;" title="跳转到订单列表页 | 查看所有订单明细">查看全部 →</a>
+    </div>
+    <div class="card-body">
+        {% if orders %}
+        <table>
+            <thead>
+                <tr>
+                    <th>订单号</th>
+                    <th>客户</th>
+                    <th>金额</th>
+                    <th>状态</th>
+                    <th>运单号</th>
+                    <th>时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in orders[:20] %}
+                <tr onclick="location.href='/order/{{ o.platform_order_id }}'" style="cursor:pointer">
+                    <td><strong>{{ o.order_number or o.platform_order_id[:8] }}</strong></td>
+                    <td>{{ o.customer_name or '-' }}</td>
+                    <td>{{ o.currency }} {{ o.total_price }}</td>
+                    <td>
+                        {% if o.status == 'shipped' %}
+                        <span class="badge badge-shipped">已发货</span>
+                        {% elif o.status in ('paid','authorized') %}
+                        <span class="badge badge-paid">已付款</span>
+                        {% elif o.status in ('pending') %}
+                        <span class="badge badge-pending">待处理</span>
+                        {% elif o.status == 'cancelled' %}
+                        <span class="badge badge-cancelled">已取消</span>
+                        {% elif o.status == 'refunded' %}
+                        <span class="badge" style="background:#f3e5f5;color:#7b1fa2">已退款</span>
+                        {% else %}
+                        <span class="badge badge-pending">{{ o.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ o.tracking_number or '-' }}</td>
+                    <td style="color:#999; font-size:12px">{{ o.created_at[:16] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <p>还没有订单数据</p>
+            <br>
+            <button class="btn btn-primary" onclick="syncOrders()">🔄 同步 Shopify 订单</button>
+            <p style="margin-top:12px;font-size:12px;color:#999;">
+                配置环境变量 SHOPIFY_SHOP 和 SHOPIFY_ACCESS_TOKEN 后点击同步
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if low_stock %}
+<div class="card">
+    <div class="card-header">
+        ⚠️ 低库存告警
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr><th>SKU</th><th>品名</th><th>库存</th><th>价格</th></tr>
+            </thead>
+            <tbody>
+                {% for p in low_stock %}
+                <tr>
+                    <td><strong>{{ p.sku }}</strong></td>
+                    <td>{{ p.title }} {{ p.variant_title or '' }}</td>
+                    <td style="color:#e53935;font-weight:600">{{ p.inventory_quantity }}</td>
+                    <td>${{ p.price }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

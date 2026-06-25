@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}订单列表{% endblock %}
+{% block content %}
+
+<div class="card">
+    <div class="card-header">
+        订单列表
+        <div>
+            <input class="search-box" id="searchInput" placeholder="搜索订单号 / 客户 / 运单号..."
+                   value="{{ search or '' }}" title="输入订单号、客户名或运单号，按回车搜索">
+            <button class="btn btn-primary" onclick="search()" title="根据输入的关键词在订单表模糊搜索订单号/客户/运单号">搜索</button>
+            <button class="btn btn-sm" style="background:#f39c12;color:#fff" onclick="syncOmsTracking()" id="syncOmsBtn" title="数据来源：领星OMS出库单 → 匹配海外仓发货订单 | 拉取最近30天OMS物流单号，更新到对应订单的运单号和物流商字段">📦 同步OMS运单号</button>
+            {% if status_filter %}
+            <a href="/orders" class="btn" style="background:#eee" title="移除状态筛选条件，显示全部订单">清除筛选</a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body">
+        <div style="margin-bottom:12px">
+            <a href="/orders" class="badge badge-paid" style="text-decoration:none;cursor:pointer" title="显示所有状态的订单">全部</a>
+            <a href="/orders?status=pending" class="badge badge-pending" style="text-decoration:none;cursor:pointer;margin-left:4px" title="仅显示待处理订单 | 订单已创建但未付款">待处理</a>
+            <a href="/orders?status=paid" class="badge badge-paid" style="text-decoration:none;cursor:pointer;margin-left:4px" title="仅显示已付款订单 | 客户已付款待发货">已付款</a>
+            <a href="/orders?status=shipped" class="badge badge-shipped" style="text-decoration:none;cursor:pointer;margin-left:4px" title="仅显示已发货订单 | 运单号已录入">已发货</a>
+            <a href="/orders?status=cancelled" class="badge badge-cancelled" style="text-decoration:none;cursor:pointer;margin-left:4px" title="仅显示已取消订单 | 订单已取消不处理">已取消</a>
+            <a href="/orders?status=refunded" class="badge" style="text-decoration:none;cursor:pointer;margin-left:4px;background:#f3e5f5;color:#7b1fa2" title="仅显示已退款订单">已退款</a>
+        </div>
+
+        {% if orders %}
+        <table>
+            <thead>
+                <tr>
+                    <th title="运输类型：海外仓发货=跨境仓有库存，国内直发=跨境仓无库存。订单同步时固化，不随后续库存变化">运输类型</th>
+                    <th title="平台订单号，点击行查看详情">订单号</th>
+                    <th>平台</th>
+                    <th>客户</th>
+                    <th>金额</th>
+                    <th>状态</th>
+                    <th title="物流运单号，来源于OMS同步或手动录入">运单号</th>
+                    <th title="物流商名称，如云途物流、AS-YWE等">物流商</th>
+                    <th>时间</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for o in orders %}
+                <tr onclick="location.href='/order/{{ o.platform_order_id }}'" style="cursor:pointer" title="点击查看订单详情、商品明细、采购信息">
+                    <td>
+                        {% if o.shipping_type == '海外仓发货' %}
+                        <span class="badge badge-shipped" title="该订单产品在跨境仓有库存，从海外仓发货">海外仓发货</span>
+                        {% elif o.shipping_type == '国内直发' %}
+                        <span class="badge badge-pending" title="该订单产品跨境仓无库存，从国内直发">国内直发</span>
+                        {% else %}
+                        <span class="badge badge-pending">{{ o.shipping_type or '国内直发' }}</span>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ o.order_number or o.platform_order_id[:8] }}</strong></td>
+                    <td>{{ o.platform }}</td>
+                    <td>{{ o.customer_name or '-' }}</td>
+                    <td>{{ o.currency or 'USD' }} {{ o.total_price }}</td>
+                    <td>
+                        {% if o.status == 'shipped' %}
+                        <span class="badge badge-shipped">已发货</span>
+                        {% elif o.status in ('paid','authorized') %}
+                        <span class="badge badge-paid">已付款</span>
+                        {% elif o.status in ('pending') %}
+                        <span class="badge badge-pending">待处理</span>
+                        {% elif o.status == 'cancelled' %}
+                        <span class="badge badge-cancelled">已取消</span>
+                        {% else %}
+                        <span class="badge badge-pending">{{ o.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ o.tracking_number or '-' }}</td>
+                    <td>{{ o.tracking_company or '-' }}</td>
+                    <td style="color:#999;font-size:12px">{{ o.created_at[:16] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">暂无订单</div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function search() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (q) window.location.href = '/orders?search=' + encodeURIComponent(q);
+    else window.location.href = '/orders';
+}
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') search();
+});
+
+async function syncOmsTracking() {
+    var btn = document.getElementById('syncOmsBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ 同步中...';
+    try {
+        var r = await fetch('/api/oms/sync-tracking', {method:'POST'});
+        var d = await r.json();
+        if (d.status === 'ok') {
+            alert(d.message);
+            if (d.updated > 0) location.reload();
+        } else {
+            alert('同步失败: ' + (d.message || '未知错误'));
+        }
+    } catch(e) {
+        alert('请求出错: ' + e.message);
+    }
+    btn.disabled = false;
+    btn.textContent = '📦 同步OMS运单号';
+}
+</script>
+
+{% endblock %}

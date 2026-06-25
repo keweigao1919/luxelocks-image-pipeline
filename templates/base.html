@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuxeLocks Hub - {% block title %}管理中台{% endblock %}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #f0f2f5; color: #333; display: flex; min-height: 100vh; }
+        .sidebar { width: 200px; background: #1a1a2e; color: white; flex-shrink: 0; padding-top: 0; }
+        .sidebar .logo { padding: 16px 20px; font-size: 16px; font-weight: 700; border-bottom: 1px solid #2a2a4a; }
+        .sidebar .logo span { color: #e94560; }
+        .sidebar .section { padding: 8px 20px 4px; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-top: 8px; }
+        .sidebar a { display: block; padding: 10px 20px; color: #aaa; text-decoration: none; font-size: 14px; transition: 0.2s; cursor: pointer; }
+        .sidebar a:hover, .sidebar a.active { color: white; background: #16213e; border-left: 3px solid #e94560; }
+        .sidebar a .icon { margin-right: 8px; }
+        .sidebar .submenu { overflow: hidden; transition: max-height 0.3s ease; }
+        .sidebar .submenu.collapsed { max-height: 0; }
+        .sidebar .submenu.expanded { max-height: 200px; }
+        .sidebar .submenu a { padding-left: 40px; font-size: 13px; }
+        .sidebar .menu-parent { position: relative; }
+        .sidebar .menu-parent .arrow { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 10px; transition: 0.2s; color: #666; }
+        .sidebar .menu-parent.open .arrow { transform: translateY(-50%) rotate(0deg); }
+        .main { flex: 1; overflow-x: auto; display: flex; flex-direction: column; }
+        .header { background: white; padding: 0 24px; height: 48px; display: flex; align-items: center; justify-content: flex-end; border-bottom: 1px solid #e8e8e8; flex-shrink: 0; }
+        .header .quick-search { padding: 5px 10px; border: 1px solid #ddd; border-radius: 4px; width: 200px; font-size: 13px; margin-right: 12px; }
+        .header a { color: #666; text-decoration: none; font-size: 13px; margin-left: 16px; }
+        .header a:hover { color: #e94560; }
+        /* Tab bar */
+        .tab-bar { background: #f5f6fa; padding: 0 8px; height: 36px; display: flex; align-items: flex-end; gap: 2px; flex-shrink: 0; border-bottom: 1px solid #e8e8e8; overflow-x: auto; overflow-y: hidden; }
+        .tab-bar::-webkit-scrollbar { height: 2px; }
+        .tab-bar .tab { display: inline-flex; align-items: center; padding: 6px 10px 6px 14px; background: #e8e8e8; border-radius: 6px 6px 0 0; font-size: 12px; color: #666; cursor: pointer; white-space: nowrap; max-width: 160px; transition: 0.15s; border: 1px solid transparent; border-bottom: none; user-select: none; }
+        .tab-bar .tab:hover { background: #ddd; color: #333; }
+        .tab-bar .tab.active { background: white; color: #333; font-weight: 600; border-color: #e8e8e8; }
+        .tab-bar .tab .tab-icon { margin-right: 5px; font-size: 13px; }
+        .tab-bar .tab .tab-close { margin-left: 6px; font-size: 14px; color: #bbb; line-height: 1; cursor: pointer; padding: 0 2px; border-radius: 2px; }
+        .tab-bar .tab .tab-close:hover { color: #e53935; background: #fce4ec; }
+        .container { padding: 24px; flex: 1; overflow-y: auto; }
+        .stats { display: grid; gap: 16px; margin-bottom: 24px; }
+        .stats.col4 { grid-template-columns: repeat(4, 1fr); }
+        .stats.col3 { grid-template-columns: repeat(3, 1fr); }
+        .stat-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        .stat-card .label { font-size: 13px; color: #888; margin-bottom: 8px; }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 24px; }
+        .card-header { padding: 14px 20px; border-bottom: 1px solid #eee; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .card-body { padding: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+        th { background: #fafafa; font-weight: 600; color: #666; }
+        tr:hover { background: #fafafa; }
+        .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge-pending { background: #fff3e0; color: #e67e22; }
+        .badge-shipped { background: #e8f5e9; color: #27ae60; }
+        .badge-paid { background: #e3f2fd; color: #2196f3; }
+        .badge-cancelled { background: #fce4ec; color: #e53935; }
+        .badge-info { background: #e3f2fd; color: #2196f3; }
+        .btn { display: inline-block; padding: 7px 14px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-green { background: #27ae60; color: white; }
+        .btn-green:hover { background: #219a52; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .search-box { padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; width: 240px; font-size: 13px; }
+        .search-box:focus { outline: none; border-color: #3498db; }
+        .empty { text-align: center; padding: 40px; color: #999; }
+        .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; background: #333; color: white; border-radius: 8px; display: none; z-index: 1000; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="logo"><span>LuxeLocks</span> Hub</div>
+        <div class="section">业务管理</div>
+        <a href="#" onclick="openTab(event,'/','📊','首页看板')" title="数据来源：Shopify订单统计 | 显示今日订单数、待处理、已发货等汇总数据"><span class="icon">📊</span> 首页看板</a>
+        <a href="#" onclick="openTab(event,'/orders','📋','订单管理')" title="数据来源：Shopify API同步 | 查看/搜索/筛选所有订单，同步OMS运单号"><span class="icon">📋</span> 订单管理</a>
+        <a href="#" onclick="openTab(event,'/products','📦','产品管理')" title="数据来源：Shopify + 领星OMS仓库 | 管理产品SKU、库存、状态，同步跨境仓存在途"><span class="icon">📦</span> 产品管理</a>
+        {% set inv_active = request.url.path.startswith('/inventory/') %}
+        <a class="menu-parent {% if inv_active %}open active{% endif %}" onclick="toggleSubmenu(this)" title="数据来源：领星OMS warehouse_inventory | 按仓库查看各SKU的可用库存在途">
+            <span class="icon">📊</span> 库存管理
+            <span class="arrow">{% if inv_active %}▼{% else %}▶{% endif %}</span>
+        </a>
+        <div class="submenu {% if inv_active %}expanded{% else %}collapsed{% endif %}">
+            <a href="#" onclick="openTab(event,'/inventory/new-products','🆕','新品页')" title="数据来源：领星OMS + 手动录入 | 管理新品SKU和库存信息"><span class="icon">🆕</span> 新品页</a>
+            <a href="#" onclick="openTab(event,'/inventory/luxelocks','🏭','LuxeLocks仓')" title="数据来源：领星OMS LuxeLocks仓 | LuxeLocks仓库SKU库存明细"><span class="icon">🏭</span> LuxeLocks仓</a>
+            <a href="#" onclick="openTab(event,'/inventory/velourahair','🏭','VelouraHair仓')" title="数据来源：领星OMS VelouraHair仓 | VelouraHair仓库SKU库存明细"><span class="icon">🏭</span> VelouraHair仓</a>
+        </div>
+        <div class="section">物流管理</div>
+        <a href="#" onclick="openTab(event,'/headhaul','🚢','头程管理')" title="数据来源：华威尔TMS API | 管理头程物流运单，查询轨迹"><span class="icon">🚢</span> 头程管理</a>
+        <a href="#" onclick="openTab(event,'/matters','⏰','重要事项')" title="手动录入 | 记录待办事项，到期提醒"><span class="icon">⏰</span> 重要事项</a>
+        <div class="section">采购</div>
+        <a href="#" onclick="openTab(event,'/procurement','🛒','采购资源池')" title="数据来源：产品库导入 + 手动录入 | 管理SKU采购来源，关联供应商自动填充联系信息"><span class="icon">🛒</span> 采购资源信息池</a>
+        <a href="#" onclick="openTab(event,'/suppliers','🏭','供应商管理')" title="手动录入 | 管理供应商名称、Seller ID、采购链接、联系人"><span class="icon">🏭</span> 供应商管理</a>
+        <div class="section">素材</div>
+        <a href="#" onclick="openTab(event,'/media','🎬','产品素材')" title="数据来源：本地文件夹 \\huawei\Users\HUAWEI\Pictures\产品 | 浏览/搜索/删除产品图片和视频，双向同步"><span class="icon">🎬</span> 产品素材</a>
+        <div class="section">工具</div>
+        <a href="#" onclick="openTab(event,'/reminders','📬','邮件提醒')" title="手动设置 | 到期自动发邮件到 gkway@qq.com，支持QQ SMTP"><span class="icon">📬</span> 邮件提醒</a>
+        <div class="section">系统</div>
+        <a href="#" onclick="openTab(event,'/sku-mapping','🔗','SKU映射')" title="数据来源：手动配置 | 管理不同系统间简化SKU映射关系（Shopify↔跨境↔LuxeLocks↔Veloura）"><span class="icon">🔗</span> SKU映射</a>
+        <a href="#" onclick="syncOrders()" title="数据来源：Shopify API → 本地数据库 | 拉取最新50个订单，更新订单状态和商品明细"><span class="icon">🔄</span> 同步Shopify</a>
+        <a href="#" onclick="syncOMSTracking()" title="数据来源：领星OMS → 本地运单号 | 拉取OMS出库单物流信息，匹配订单更新运单号和物流商"><span class="icon">📮</span> OMS同步物流</a>
+    </div>
+    <div class="main">
+        <div class="header">
+            <input class="quick-search" id="navTracking" placeholder="🔍 运单号查物流" onkeydown="if(event.key==='Enter')lookupTracking(this.value)" title="数据来源：17TRACK | 输入运单号回车查询物流轨迹，自动跳转17TRACK页面">
+            <a href="#" onclick="openTab(event,'/headhaul','🚢','头程管理')" title="头程物流管理 | 华威尔TMS运单查询和创建">头程</a>
+            <a href="#" onclick="openTab(event,'/orders','📋','订单管理')" title="订单列表 | 查看/搜索/筛选所有订单">订单</a>
+            <a href="#" onclick="openTab(event,'/','📊','首页看板')" title="首页看板 | 今日订单统计和低库存预警">首页</a>
+        </div>
+        <div class="tab-bar" id="tabBar"></div>
+        <div class="container">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <script>
+        // ── Toast ──
+        function showToast(msg, d){ d=d||2000; var t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(function(){t.style.display='none'},d); }
+        // ── Sync actions ──
+        async function syncOrders(){ showToast('同步Shopify订单中...',3000); try{ var r=await fetch('/api/sync/orders',{method:'POST'}); var d=await r.json(); showToast('同步完成:'+(d.synced||0)+'个订单'); setTimeout(function(){location.reload()},1500); }catch(e){ showToast('失败:'+e.message); } }
+        async function syncOMSTracking(){ showToast('从OMS同步物流中...',3000); try{ var r=await fetch('/api/oms/sync',{method:'POST'}); var d=await r.json(); showToast('OMS:'+(d.total_oms||0)+'条,匹配'+(d.matched||0)+',更新'+(d.updated||0)); setTimeout(function(){location.reload()},1500); }catch(e){ showToast('失败:'+e.message); } }
+        async function lookupTracking(tn){ if(!tn.trim())return; showToast('查询中...',2000); try{ var r=await fetch('/api/tracking/lookup/'+encodeURIComponent(tn.trim())); var d=await r.json(); window.open('https://t.17track.net/zh-cn#nums='+tn.trim(),'_blank'); }catch(e){ window.open('https://t.17track.net/zh-cn#nums='+tn.trim(),'_blank'); } }
+        // ── Submenu toggle ──
+        function toggleSubmenu(parent){
+            var sub = parent.nextElementSibling;
+            var arrow = parent.querySelector('.arrow');
+            if(sub.classList.contains('collapsed')){
+                sub.classList.remove('collapsed'); sub.classList.add('expanded');
+                parent.classList.add('open');
+                if(arrow) arrow.textContent = '▼';
+            } else {
+                sub.classList.remove('expanded'); sub.classList.add('collapsed');
+                parent.classList.remove('open');
+                if(arrow) arrow.textContent = '▶';
+            }
+        }
+
+        // ═══════════════════════════════════
+        // 多标签页系统
+        // ═══════════════════════════════════
+        var TABS_KEY = 'luxelocks_tabs';
+        var currentPath = window.location.pathname;
+
+        function getTabs(){
+            try { return JSON.parse(localStorage.getItem(TABS_KEY)) || []; }
+            catch(e) { return []; }
+        }
+        function saveTabs(tabs){
+            // 最多保留20个
+            if(tabs.length > 20) tabs = tabs.slice(tabs.length - 20);
+            localStorage.setItem(TABS_KEY, JSON.stringify(tabs));
+        }
+
+        function openTab(e, url, icon, title){
+            if(e) e.preventDefault();
+            var tabs = getTabs();
+            // 检查是否已存在
+            var exists = false;
+            for(var i=0; i<tabs.length; i++){
+                if(tabs[i].url === url){ tabs[i].active = true; exists = true; }
+                else { tabs[i].active = false; }
+            }
+            if(!exists){
+                tabs.push({url: url, icon: icon, title: title, active: true});
+                // 其他tab取消active
+                for(var i=0; i<tabs.length-1; i++) tabs[i].active = false;
+            }
+            saveTabs(tabs);
+            window.location.href = url;
+        }
+
+        function closeTab(e, url){
+            e.stopPropagation();
+            var tabs = getTabs();
+            var idx = -1;
+            for(var i=0; i<tabs.length; i++){ if(tabs[i].url === url){ idx = i; break; } }
+            if(idx < 0) return;
+            var wasActive = tabs[idx].active;
+            tabs.splice(idx, 1);
+            // 如果关闭的是当前tab，跳转到相邻tab
+            if(wasActive && url === currentPath){
+                var next = tabs[Math.min(idx, tabs.length-1)];
+                saveTabs(tabs);
+                if(next){ window.location.href = next.url; }
+                else { window.location.href = '/'; }
+                return;
+            }
+            saveTabs(tabs);
+            renderTabs();
+        }
+
+        function renderTabs(){
+            var bar = document.getElementById('tabBar');
+            if(!bar) return;
+            var tabs = getTabs();
+            if(tabs.length <= 1){ bar.innerHTML = ''; return; }  // 只有一个首页时不显示tab栏
+            var html = '';
+            for(var i=0; i<tabs.length; i++){
+                var t = tabs[i];
+                var cls = (t.url === currentPath) ? 'tab active' : 'tab';
+                html += '<span class="'+cls+'" onclick="window.location.href=\''+t.url+'\'" title="'+t.title+'">';
+                html += '<span class="tab-icon">'+t.icon+'</span>'+t.title;
+                html += '<span class="tab-close" onclick="closeTab(event,\''+t.url+'\')">×</span>';
+                html += '</span>';
+            }
+            bar.innerHTML = html;
+        }
+
+        // 页面加载时确保当前页在tabs中并渲染
+        (function initTabs(){
+            var tabs = getTabs();
+            var found = false;
+            // 尝试从页面标题获取icon
+            var titleMap = {
+                '/': {icon:'📊', title:'首页看板'},
+                '/orders': {icon:'📋', title:'订单管理'},
+                '/products': {icon:'📦', title:'产品管理'},
+                '/inventory/new-products': {icon:'🆕', title:'新品页'},
+                '/inventory/luxelocks': {icon:'🏭', title:'LuxeLocks仓'},
+                '/inventory/velourahair': {icon:'🏭', title:'VelouraHair仓'},
+                '/headhaul': {icon:'🚢', title:'头程管理'},
+                '/media': {icon:'🎬', title:'产品素材'},
+                '/matters': {icon:'⏰', title:'重要事项'},
+                '/reminders': {icon:'📬', title:'邮件提醒'},
+                '/sku-mapping': {icon:'🔗', title:'SKU映射'}
+            };
+            // 模糊匹配
+            var info = null;
+            for(var key in titleMap){
+                if(currentPath === key || currentPath.startsWith(key+'?')){
+                    info = titleMap[key]; break;
+                }
+            }
+            // 订单详情特殊处理
+            if(currentPath.startsWith('/order/')) info = {icon:'📋', title:'订单详情'};
+
+            for(var i=0; i<tabs.length; i++){
+                if(tabs[i].url === currentPath || tabs[i].url === currentPath.split('?')[0]){
+                    tabs[i].active = true;
+                    found = true;
+                } else {
+                    tabs[i].active = false;
+                }
+            }
+            if(!found && info){
+                tabs.push({url: currentPath, icon: info.icon, title: info.title, active: true});
+                for(var i=0; i<tabs.length-1; i++) tabs[i].active = false;
+            }
+            saveTabs(tabs);
+            renderTabs();
+        })();
+    </script>
+</body>
+</html>

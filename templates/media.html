@@ -1,0 +1,331 @@
+﻿{% extends "base.html" %}
+{% block title %}产品素材{% endblock %}
+{% block content %}
+<style>
+.media-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.media-toolbar .btn { white-space:nowrap; }
+.breadcrumb { display:flex; align-items:center; gap:4px; font-size:13px; margin-bottom:16px; flex-wrap:wrap; padding:8px 12px; background:#f8f9fa; border-radius:6px; }
+.breadcrumb a { color:#3498db; text-decoration:none; cursor:pointer; }
+.breadcrumb a:hover { text-decoration:underline; }
+.breadcrumb span { color:#999; }
+.media-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap:12px; }
+.media-card { background:white; border:1px solid #eee; border-radius:8px; overflow:hidden; cursor:pointer; transition:0.2s; position:relative; }
+.media-card:hover { border-color:#3498db; box-shadow:0 2px 12px rgba(0,0,0,0.1); transform:translateY(-1px); }
+.media-card.selected { border-color:#e94560; box-shadow:0 0 0 2px #e9456040; }
+.media-card .thumb { height:120px; display:flex; align-items:center; justify-content:center; background:#f5f6fa; overflow:hidden; }
+.media-card .thumb img { width:100%; height:100%; object-fit:cover; }
+.media-card .thumb .icon-folder { font-size:48px; }
+.media-card .thumb .icon-file { font-size:36px; color:#bbb; }
+.media-card .info { padding:8px 10px; }
+.media-card .name { font-size:12px; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:500; }
+.media-card .meta { font-size:10px; color:#999; margin-top:2px; }
+.media-card .check { position:absolute; top:6px; right:6px; width:20px; height:20px; border-radius:50%; background:white; border:2px solid #ddd; display:none; align-items:center; justify-content:center; font-size:11px; }
+.media-card.select-mode .check { display:flex; }
+.media-card.selected .check { background:#e94560; border-color:#e94560; color:white; }
+.media-card .del-btn { position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; background:#e53935; color:white; border:none; cursor:pointer; font-size:14px; display:none; align-items:center; justify-content:center; line-height:1; }
+.media-card:hover .del-btn { display:flex; }
+.media-card.select-mode .del-btn { display:none; }
+.empty-media { text-align:center; padding:60px 20px; color:#999; }
+.empty-media .big-icon { font-size:64px; margin-bottom:16px; }
+.upload-zone { border:2px dashed #ddd; border-radius:12px; padding:40px; text-align:center; cursor:pointer; transition:0.2s; margin-bottom:16px; background:#fafbfc; }
+.upload-zone:hover { border-color:#3498db; background:#f0f7ff; }
+.upload-zone.drag-over { border-color:#27ae60; background:#e8f5e9; }
+.upload-zone .upload-icon { font-size:40px; margin-bottom:8px; }
+.modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; align-items:center; justify-content:center; cursor:zoom-out; }
+.modal-overlay img { max-width:92%; max-height:92%; border-radius:4px; box-shadow:0 4px 30px rgba(0,0,0,0.5); }
+.modal-overlay .nav-prev,.modal-overlay .nav-next { position:absolute; top:50%; transform:translateY(-50%); width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.15); color:white; border:none; cursor:pointer; font-size:24px; display:flex; align-items:center; justify-content:center; z-index:10; }
+.modal-overlay .nav-prev:hover,.modal-overlay .nav-next:hover { background:rgba(255,255,255,0.3); }
+.modal-overlay .nav-prev { left:20px; }
+.modal-overlay .nav-next { right:20px; }
+</style>
+
+<h2 style="margin-bottom:4px">🎬 产品素材</h2>
+<p style="font-size:12px;color:#999;margin-bottom:16px">{{ media_root }}</p>
+
+<!-- 工具栏 -->
+<div class="media-toolbar">
+    <button class="btn btn-sm" style="background:#27ae60;color:#fff" onclick="syncTree()" title="重新加载文件索引 | 从本地文件夹 \\huawei\Users\HUAWEI\Pictures\产品 扫描所有文件，同步到页面">🔄 同步</button>
+    <input id="mediaSearch" class="search-box" placeholder="索引加载中..." title="搜索文件名或文件夹 | 回车或点击搜索按钮，本地即时过滤" style="width:200px" onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="btn btn-sm" style="background:#555;color:#fff" onclick="doSearch()" title="在文件索引中搜索 | 匹配文件名和文件夹名，本地即时搜索毫秒级响应">🔍 搜索</button>
+    <button class="btn btn-sm" style="background:#eee" onclick="showMkdir()" title="在当前目录下创建新文件夹 | 本地文件夹同步创建">📁 新建文件夹</button>
+    <button class="btn btn-sm" style="background:#eee" onclick="toggleSelectMode()" id="selectBtn" title="进入批量选择模式 | 勾选多个文件/文件夹后批量删除">☑ 批量选择</button>
+    <button class="btn btn-sm" style="background:#e53935;color:#fff;display:none" id="batchDelBtn" onclick="batchDelete()" title="删除所有选中的文件/文件夹 | 本地文件同步删除，操作不可恢复">🗑 删除选中</button>
+    <span id="selectCount" style="font-size:12px;color:#e53935;display:none"></span>
+    <div style="flex:1"></div>
+    <span style="font-size:12px;color:#999" id="itemCount"></span>
+</div>
+
+<!-- 面包屑 -->
+<div class="breadcrumb" id="breadcrumb"></div>
+
+<!-- 文件网格 -->
+<div class="media-grid" id="mediaGrid"></div>
+
+<!-- 图片预览 -->
+<div class="modal-overlay" id="previewModal" style="display:none" onclick="closePreview()">
+    <button class="nav-prev" onclick="event.stopPropagation();prevImage()">‹</button>
+    <img id="previewImg" src="">
+    <button class="nav-next" onclick="event.stopPropagation();nextImage()">›</button>
+</div>
+
+<!-- 新建文件夹弹窗 -->
+<div id="mkdirModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:8px;padding:24px;max-width:360px;width:90%">
+        <h3>新建文件夹</h3>
+        <input id="newFolderName" class="search-box" placeholder="文件夹名称" style="width:100%;margin-top:12px" onkeydown="if(event.key==='Enter')createFolder()">
+        <div style="margin-top:16px;text-align:right">
+            <button class="btn" style="background:#eee" onclick="document.getElementById('mkdirModal').style.display='none'">取消</button>
+            <button class="btn btn-primary" onclick="createFolder()">创建</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var currentPath = '';
+var selectMode = false;
+var selected = new Set();
+var allImages = [];
+var previewIdx = -1;
+var IMAGE_EXTS = new Set(['.jpg','.jpeg','.png','.gif','.webp','.bmp','.svg','.ico']);
+var VIDEO_EXTS = new Set(['.mp4','.mov','.avi','.webm','.mkv','.wmv']);
+
+function extIcon(ext, isDir, name){
+    if(isDir) return '📁';
+    if(IMAGE_EXTS.has(ext)) return '🖼️';
+    if(VIDEO_EXTS.has(ext)) return '🎬';
+    return '📄';
+}
+
+function formatSize(bytes){
+    if(bytes < 1024) return bytes + ' B';
+    if(bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+    if(bytes < 1073741824) return (bytes/1048576).toFixed(1) + ' MB';
+    return (bytes/1073741824).toFixed(1) + ' GB';
+}
+
+var searchActive = false;
+var fileTree = [];
+var treeLoaded = false;
+
+function syncTree(){
+    treeLoaded = false;
+    document.getElementById('mediaSearch').placeholder = '索引加载中...';
+    fetch('/api/media/tree?force=true').then(function(r){ return r.json(); }).then(function(d){
+        fileTree = d.paths || [];
+        treeLoaded = true;
+        document.getElementById('mediaSearch').placeholder = '搜索 ' + fileTree.length + ' 个文件/文件夹...';
+        if(searchActive){ doSearch(); }
+    });
+}
+
+// 页面加载时后台预加载文件树
+(function initTree(){ syncTree(); })();
+
+function doSearch(){
+    var kw = document.getElementById('mediaSearch').value.trim();
+    if(!kw){ searchActive=false; loadMedia(currentPath); return; }
+    searchActive = true;
+    if(!treeLoaded){
+        document.getElementById('breadcrumb').innerHTML = '<span style="color:#e94560">🔍 索引加载中...</span>';
+        document.getElementById('itemCount').textContent = '...';
+        document.getElementById('mediaGrid').innerHTML = '<div class="empty-media"><div class="big-icon">⏳</div><p>首次加载文件索引，请稍候...</p></div>';
+        return;
+    }
+    // 本地即时搜索（毫秒级）
+    var matches = [];
+    kw = kw.toLowerCase();
+    for(var i=0; i<fileTree.length; i++){
+        if(fileTree[i].name.toLowerCase().indexOf(kw) > -1){
+            matches.push(fileTree[i]);
+        }
+    }
+    if(matches.length > 200) matches = matches.slice(0, 200);
+    var items = matches.map(function(f){
+        return {
+            name: f.name, is_dir: f.is_dir, size: 0, modified: '',
+            ext: f.is_dir ? '' : ('.' + f.name.split('.').pop().toLowerCase())
+        };
+    });
+    document.getElementById('breadcrumb').innerHTML = '<span style="color:#e94560">🔍 搜索: '+kw+' ('+items.length+' 结果)</span>';
+    document.getElementById('itemCount').textContent = items.length + ' 项';
+    renderGrid(items, '');
+}
+
+async function loadMedia(path){
+    currentPath = path;
+    searchActive = false;
+    document.getElementById('mediaSearch').value = '';
+    try{
+        var r = await fetch('/api/media/list?path=' + encodeURIComponent(path));
+        var d = await r.json();
+        renderBreadcrumb(d.breadcrumb);
+        renderGrid(d.items, d.current);
+        document.getElementById('itemCount').textContent = d.items.length + ' 项';
+    }catch(e){ showToast('加载失败: '+e.message); }
+}
+
+function renderBreadcrumb(bc){
+    var html = '';
+    for(var i=0; i<bc.length; i++){
+        if(i>0) html += '<span>›</span>';
+        html += '<a onclick="loadMedia(\''+bc[i].path+'\')">'+bc[i].name+'</a>';
+    }
+    document.getElementById('breadcrumb').innerHTML = html;
+}
+
+function renderGrid(items, curPath){
+    var grid = document.getElementById('mediaGrid');
+    allImages = items.filter(function(f){ return IMAGE_EXTS.has(f.ext) && !f.is_dir; });
+    if(items.length === 0){
+        grid.innerHTML = '<div class="empty-media"><div class="big-icon">📭</div><p>空文件夹</p></div>';
+        return;
+    }
+    var html = '';
+    for(var i=0; i<items.length; i++){
+        var item = items[i];
+        var cls = selected.has(item.name) ? 'media-card selected' : 'media-card';
+        if(selectMode) cls += ' select-mode';
+        var thumbHtml = '';
+        if(item.is_dir){
+            thumbHtml = '<div class="thumb"><span class="icon-folder">📁</span></div>';
+        } else if(IMAGE_EXTS.has(item.ext)){
+            var previewUrl = '/api/media/preview?path=' + encodeURIComponent((curPath ? curPath + '/' : '') + item.name);
+            thumbHtml = '<div class="thumb"><img src="'+previewUrl+'" loading="lazy" onerror="this.parentElement.innerHTML=\'<span class=\\\'icon-file\\\'>📄</span>\'"></div>';
+        } else {
+            thumbHtml = '<div class="thumb"><span class="icon-file">'+extIcon(item.ext, false, item.name)+'</span></div>';
+        }
+        var displayName = item.name;
+        var subPath = '';
+        if(searchActive && item.name.indexOf('/') > -1){
+            var parts = item.name.split('/');
+            displayName = parts[parts.length - 1];
+            subPath = parts.slice(0, -1).join('/');
+        }
+        html += '<div class="'+cls+'" onclick="cardClick(event, \''+item.name+'\', '+item.is_dir+', \''+item.ext+'\', \''+(curPath||'')+'\')">';
+        html += '<div class="check">✓</div>';
+        html += '<button class="del-btn" onclick="event.stopPropagation();delItem(\''+item.name+'\')">×</button>';
+        html += thumbHtml;
+        html += '<div class="info"><div class="name" title="'+item.name+'">'+displayName+'</div>';
+        html += '<div class="meta">'+ (subPath ? '📁 '+subPath+' · ':'') + (item.is_dir ? '文件夹' : formatSize(item.size)) + ' · ' + item.modified + '</div></div>';
+        html += '</div>';
+    }
+    grid.innerHTML = html;
+    document.getElementById('selectCount').textContent = selected.size + ' 个已选';
+    document.getElementById('selectCount').style.display = selected.size > 0 ? '' : 'none';
+    document.getElementById('batchDelBtn').style.display = selectMode ? '' : 'none';
+}
+
+function cardClick(e, name, isDir, ext, curPath){
+    if(selectMode){
+        if(selected.has(name)){ selected.delete(name); } else { selected.add(name); }
+        var cards = document.querySelectorAll('.media-card');
+        cards.forEach(function(c){ if(c.querySelector('.name').textContent === name) c.classList.toggle('selected', selected.has(name)); });
+        document.getElementById('selectCount').textContent = selected.size + ' 个已选';
+        document.getElementById('selectCount').style.display = selected.size > 0 ? '' : 'none';
+        return;
+    }
+    if(isDir){
+        // 搜索模式下点击文件夹→导航到该文件夹
+        var folderPath = curPath ? curPath + '/' + name : name;
+        loadMedia(folderPath);
+    } else if(IMAGE_EXTS.has(ext)){
+        // 预览图片，name可能包含子路径
+        previewIdx = allImages.findIndex(function(f){ return f.name === name; });
+        if(previewIdx >= 0){
+            showPreview(curPath);
+        }
+    }
+}
+
+function showPreview(curPath){
+    if(previewIdx < 0 || previewIdx >= allImages.length) return;
+    var f = allImages[previewIdx];
+    var url = '/api/media/preview?path=' + encodeURIComponent((curPath ? curPath + '/' : '') + f.name);
+    document.getElementById('previewImg').src = url;
+    document.getElementById('previewModal').style.display = 'flex';
+}
+
+function closePreview(){ document.getElementById('previewModal').style.display = 'none'; }
+function prevImage(){ if(previewIdx > 0){ previewIdx--; showPreview(currentPath); } }
+function nextImage(){ if(previewIdx < allImages.length-1){ previewIdx++; showPreview(currentPath); } }
+
+document.addEventListener('keydown', function(e){
+    if(document.getElementById('previewModal').style.display === 'flex'){
+        if(e.key === 'ArrowLeft') prevImage();
+        if(e.key === 'ArrowRight') nextImage();
+        if(e.key === 'Escape') closePreview();
+    }
+});
+
+function removeFromTree(relPath){
+    // 删除后同步更新本地索引
+    for(var i=fileTree.length-1; i>=0; i--){
+        if(fileTree[i].name === relPath){ fileTree.splice(i,1); }
+        // 如果是文件夹，也删掉子项
+        else if(fileTree[i].name.indexOf(relPath+'/')===0){ fileTree.splice(i,1); }
+    }
+    document.getElementById('mediaSearch').placeholder = '搜索 ' + fileTree.length + ' 个文件/文件夹...';
+}
+
+async function delItem(name){
+    if(!confirm('删除 "'+name+'"？本地文件也会被删除！')) return;
+    try{
+        var r = await fetch('/api/media/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:currentPath, names:[name]})});
+        var d = await r.json();
+        if(d.status==='ok'){
+            // 同步更新索引
+            var rel = currentPath ? currentPath + '/' + name : name;
+            removeFromTree(rel);
+            showToast('已删除'); loadMedia(currentPath);
+        } else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function batchDelete(){
+    if(selected.size === 0) return;
+    if(!confirm('删除选中的 '+selected.size+' 项？本地文件也会被删除！')) return;
+    var names = Array.from(selected);
+    try{
+        var r = await fetch('/api/media/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:currentPath, names:names})});
+        var d = await r.json();
+        if(d.status==='ok'){
+            // 同步更新索引
+            for(var i=0; i<names.length; i++){
+                var rel = currentPath ? currentPath + '/' + names[i] : names[i];
+                removeFromTree(rel);
+            }
+            showToast('已删除 '+d.deleted+' 项'); selected.clear(); loadMedia(currentPath);
+        } else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+function toggleSelectMode(){
+    selectMode = !selectMode;
+    if(!selectMode) selected.clear();
+    document.getElementById('selectBtn').textContent = selectMode ? '☑ 取消选择' : '☑ 批量选择';
+    document.getElementById('batchDelBtn').style.display = selectMode ? '' : 'none';
+    document.getElementById('selectCount').style.display = 'none';
+    loadMedia(currentPath);
+}
+
+function showMkdir(){
+    document.getElementById('mkdirModal').style.display = 'flex';
+    document.getElementById('newFolderName').value = '';
+    setTimeout(function(){ document.getElementById('newFolderName').focus(); }, 100);
+}
+
+async function createFolder(){
+    var name = document.getElementById('newFolderName').value.trim();
+    if(!name){ showToast('请输入名称'); return; }
+    try{
+        var r = await fetch('/api/media/mkdir', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:currentPath, name:name})});
+        var d = await r.json();
+        if(d.status==='ok'){ document.getElementById('mkdirModal').style.display='none'; var rel = currentPath ? currentPath + '/' + name : name; fileTree.push({name:rel, is_dir:true}); loadMedia(currentPath); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+// 初始化
+loadMedia('');
+</script>
+{% endblock %}

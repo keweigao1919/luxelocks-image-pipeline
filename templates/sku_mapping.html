@@ -1,0 +1,112 @@
+﻿{% extends "base.html" %}
+{% block title %}SKU映射{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:12px">🔗 SKU 映射管理</h2>
+
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+    <div style="flex:1"></div>
+    <button class="btn btn-primary btn-sm" onclick="showAddForm()" title="新增SKU映射 | 配置不同系统间简化SKU对应关系（Shopify↔跨境↔LuxeLocks↔Veloura）">➕ 新增映射</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        映射列表 ({{ mappings|length }} 条)
+        <span style="font-size:12px;color:#888;font-weight:400">Shopify简化SKU → 各仓简化SKU</span>
+    </div>
+    <div class="card-body">
+        {% if mappings %}
+        <table>
+            <thead><tr>
+                <th>Shopify简化SKU</th>
+                <th style="color:#2196f3">→ 跨境在线</th>
+                <th style="color:#8e44ad">→ LuxeLocks</th>
+                <th style="color:#e67e22">→ VelouraHair</th>
+                <th style="width:60px"></th>
+            </tr></thead>
+            <tbody>
+            {% for m in mappings %}
+            <tr>
+                <td><strong>{{ m.shopify_simple_sku }}</strong></td>
+                <td style="color:#2196f3">{{ m.cross_border_simple_sku or '-' }}</td>
+                <td style="color:#8e44ad">{{ m.luxelocks_simple_sku or '-' }}</td>
+                <td style="color:#e67e22">{{ m.velourahair_simple_sku or '-' }}</td>
+                <td><button class="btn btn-sm" style="background:#e53935;color:#fff;font-size:11px;padding:2px 8px" title="删除该SKU映射 | 删除后产品页面相关库存数据将不再关联" onclick="delMapping({{ m.id }})">✕</button></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <p>暂无映射</p>
+            <p style="font-size:13px;color:#888">当Shopify简化SKU与仓库简化SKU不一致时，在此建立映射</p>
+            <br><button class="btn btn-primary" onclick="showAddForm()">➕ 新增映射</button>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div id="addModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;justify-content:center;align-items:center">
+    <div style="background:white;border-radius:8px;padding:24px;max-width:460px;width:90%">
+        <h3>新增/编辑映射</h3>
+        <div style="margin-top:16px">
+            <label style="font-size:13px;font-weight:600">Shopify简化SKU *</label>
+            <input id="mapShopify" class="search-box" placeholder="如 2068-9" style="width:100%;margin-top:4px">
+        </div>
+        <div style="margin-top:12px">
+            <label style="font-size:13px;color:#2196f3;font-weight:600">→ 跨境在线简化SKU</label>
+            <input id="mapCross" class="search-box" placeholder="如 2068-09（留空则用Shopify原值）" style="width:100%;margin-top:4px">
+        </div>
+        <div style="margin-top:12px">
+            <label style="font-size:13px;color:#8e44ad;font-weight:600">→ LuxeLocks简化SKU</label>
+            <input id="mapLuxe" class="search-box" placeholder="留空则用Shopify原值" style="width:100%;margin-top:4px">
+        </div>
+        <div style="margin-top:12px">
+            <label style="font-size:13px;color:#e67e22;font-weight:600">→ VelouraHair简化SKU</label>
+            <input id="mapVeloura" class="search-box" placeholder="留空则用Shopify原值" style="width:100%;margin-top:4px">
+        </div>
+        <div style="margin-top:20px;text-align:right">
+            <button class="btn" style="background:#eee" onclick="closeAddForm()">取消</button>
+            <button class="btn btn-primary" onclick="saveMapping()" title="保存SKU映射关系">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function showAddForm(){
+    document.getElementById('mapShopify').value='';
+    document.getElementById('mapCross').value='';
+    document.getElementById('mapLuxe').value='';
+    document.getElementById('mapVeloura').value='';
+    document.getElementById('addModal').style.display='flex';
+    document.getElementById('mapShopify').focus();
+}
+function closeAddForm(){ document.getElementById('addModal').style.display='none'; }
+async function saveMapping(){
+    var shopify=document.getElementById('mapShopify').value.trim();
+    if(!shopify){ showToast('Shopify简化SKU必填'); return; }
+    try{
+        var r=await fetch('/api/sku-mapping/save',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+                shopify_simple_sku:shopify,
+                cross_border_simple_sku:document.getElementById('mapCross').value.trim(),
+                luxelocks_simple_sku:document.getElementById('mapLuxe').value.trim(),
+                velourahair_simple_sku:document.getElementById('mapVeloura').value.trim()
+            })
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ closeAddForm(); location.reload(); }
+        else{ showToast(d.message); }
+    }catch(e){ showToast('出错:'+e.message); }
+}
+async function delMapping(id){
+    if(!confirm('删除此映射?')) return;
+    try{
+        var r=await fetch('/api/sku-mapping/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})});
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast(d.message); }
+    }catch(e){ showToast('出错:'+e.message); }
+}
+</script>
+{% endblock %}

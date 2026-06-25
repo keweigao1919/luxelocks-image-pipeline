@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}邮件提醒{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:12px">📬 邮件提醒</h2>
+
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+    <div style="flex:1"></div>
+    <button class="btn btn-sm" style="background:#888;color:#fff" onclick="testEmail()" title="发送一封测试邮件到 gkway@qq.com | 验证QQ SMTP邮件发送功能是否正常">🧪 测试邮件</button>
+    <button class="btn btn-primary btn-sm" onclick="showAddForm()" title="新增提醒事项 | 一次性或每月/每周重复提醒">➕ 新增提醒</button>
+</div>
+
+<!-- 新增表单 -->
+<div id="addForm" style="display:none;padding:16px 20px;background:#f0f7ff;border-radius:8px;margin-bottom:16px">
+    <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
+        <input id="newTitle" class="search-box" placeholder="事项标题" style="flex:2;min-width:180px">
+        <div style="display:flex;flex-direction:column;gap:2px">
+            <span id="dateLabel" style="font-size:10px;color:#666;font-weight:600">提醒日期</span>
+            <input id="newDate" class="search-box" type="date" style="width:145px" value="{{ today }}">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;color:#666;font-weight:600">重复</span>
+            <select id="newRepeat" class="search-box" style="width:100px" onchange="onRepeatChange()">
+                <option value="">不重复</option>
+                <option value="monthly">每月</option>
+                <option value="weekly">每周</option>
+            </select>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addReminder()" title="保存提醒">✅ 添加</button>
+        <button class="btn btn-sm" style="background:#eee" onclick="hideAddForm()">取消</button>
+    </div>
+    <div id="repeatHint" style="display:none;font-size:12px;color:#3498db;margin-top:6px;font-weight:500"></div>
+    <textarea id="newContent" class="search-box" placeholder="详细内容（可选）" style="width:100%;margin-top:8px;height:60px;resize:vertical"></textarea>
+</div>
+
+<div class="card">
+    <div class="card-header">提醒列表 ({{ items|length }} 条)</div>
+    <div class="card-body">
+        {% if items %}
+        <table>
+            <thead><tr>
+                <th>事项</th>
+                <th>内容</th>
+                <th>重复</th>
+                <th style="width:130px">提醒日期</th>
+                <th style="width:70px">状态</th>
+                <th style="width:50px">操作</th>
+            </tr></thead>
+            <tbody>
+            {% for item in items %}
+            <tr>
+                <td><strong>{{ item.title }}</strong></td>
+                <td style="font-size:12px;color:#888;max-width:300px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">{{ item.content or '-' }}</td>
+                <td style="font-size:11px">
+                    {% if item.repeat_type == 'monthly' %}
+                    <span class="badge" style="background:#e8f5e9;color:#27ae60">每月{{ item.repeat_day }}号</span>
+                    {% elif item.repeat_type == 'weekly' %}
+                    <span class="badge" style="background:#e3f2fd;color:#2196f3">每周{% if item.repeat_day == 0 %}一{% elif item.repeat_day == 1 %}二{% elif item.repeat_day == 2 %}三{% elif item.repeat_day == 3 %}四{% elif item.repeat_day == 4 %}五{% elif item.repeat_day == 5 %}六{% else %}日{% endif %}</span>
+                    {% else %}
+                    <span style="color:#ccc">一次性</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:13px">
+                    {% if item.repeat_type %}
+                    <span style="color:#3498db;font-weight:600">下次 {{ item.remind_date }}</span>
+                    {% elif item.remind_date < today %}
+                    <span style="color:#e53935;font-weight:600">{{ item.remind_date }}</span>
+                    {% else %}
+                    <span>{{ item.remind_date }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item.sent %}
+                    <span class="badge badge-shipped">已发送</span>
+                    {% elif item.remind_date < today %}
+                    <span class="badge badge-cancelled">已过期</span>
+                    {% else %}
+                    <span class="badge badge-pending">待发送</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#e53935;color:#fff" title="删除该提醒" onclick="delReminder({{ item.id }})">✕</button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty">
+            <p>暂无提醒事项</p>
+            <p style="font-size:13px;color:#888">点「➕ 新增提醒」添加，到期自动发邮件到你的邮箱</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function showAddForm(){ document.getElementById('addForm').style.display='block'; document.getElementById('newTitle').focus(); }
+function hideAddForm(){ document.getElementById('addForm').style.display='none'; document.getElementById('newTitle').value=''; document.getElementById('newContent').value=''; }
+function onRepeatChange(){
+    var v=document.getElementById('newRepeat').value;
+    var h=document.getElementById('repeatHint');
+    var l=document.getElementById('dateLabel');
+    if(v==='monthly'){
+        l.textContent='首次提醒日期（之后每月自动重复）';
+        l.style.color='#3498db';
+        h.style.display='block';
+        h.innerHTML='✅ 选择的是<strong>首次提醒日期</strong>，到期发送后<strong>自动推到下个月同一天</strong>，循环不止';
+    } else if(v==='weekly'){
+        l.textContent='首次提醒日期（之后每周自动重复）';
+        l.style.color='#3498db';
+        h.style.display='block';
+        h.innerHTML='✅ 选择的是<strong>首次提醒日期</strong>，到期发送后<strong>自动推到下周同一天</strong>，循环不止';
+    } else {
+        l.textContent='提醒日期（一次性）';
+        l.style.color='#666';
+        h.style.display='none';
+    }
+}
+
+async function addReminder(){
+    var title=document.getElementById('newTitle').value.trim();
+    var date=document.getElementById('newDate').value.trim();
+    var content=document.getElementById('newContent').value.trim();
+    var repeat=document.getElementById('newRepeat').value;
+    if(!title){ showToast('标题必填'); return; }
+    if(!date){ showToast('日期必填'); return; }
+    try{
+        var r=await fetch('/api/reminders/add',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({title:title,content:content,remind_date:date,repeat_type:repeat})
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function delReminder(id){
+    if(!confirm('删除此提醒?')) return;
+    try{
+        var r=await fetch('/api/reminders/delete',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:id})
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function testEmail(){
+    showToast('发送测试邮件...',5000);
+    try{
+        var r=await fetch('/api/reminders/test-email',{method:'POST'});
+        var d=await r.json();
+        showToast(d.message);
+    }catch(e){ showToast('出错: '+e.message); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,184 @@
+# LuxeLocks Hub - 唯一开发指南
+
+> **⚠️ 这是 Claude Code 和 Codex 共用的唯一权威文档。任何 AI 开始工作前必须先读此文件。**
+
+---
+
+## 技术栈
+Python 3.12 + FastAPI + Uvicorn + SQLite (`luxelocks.db`) + Jinja2
+外部API: Shopify REST 2025-04 / 领星 OMS / 华威尔 TMS
+邮件: QQ SMTP (gkway@qq.com)
+UNC媒体路径: `\\huawei\Users\HUAWEI\Pictures\产品`
+启动: `python -m uvicorn app:app --host 0.0.0.0 --port 8001` → http://localhost:8001
+入口: `app.py` (~3000行)
+
+---
+
+## 数据库完整结构
+
+### orders (5条)
+```
+id PK, platform, platform_order_id, order_number(LL-1009), customer_name, customer_email,
+total_price, currency(USD), status(pending/paid/shipped/cancelled/refunded),
+shipping_address(JSON), tracking_number, tracking_company, line_items(JSON:[{sku,title,qty,price}]),
+shipping_type(海外仓发货/国内直发,订单同步时固化), raw_data, created_at, updated_at
+```
+索引: idx_orders_platform, idx_orders_status, idx_orders_created
+
+### products (90条)
+```
+id PK, platform(shopify), platform_product_id, sku(SWLC2068-9BL18),
+title, variant_title, price, inventory_quantity(同步更新), image_url,
+product_status(active/draft/archived), variant_id(Shopify变体ID), inventory_item_id(库存项ID),
+oms_available_qty, oms_transit_qty, created_at, updated_at
+```
+索引: idx_products_sku
+
+### procurement_resources (89条)
+```
+id PK, simple_sku(UNIQUE, 如2068-9), supplier, seller_id(关联suppliers),
+cost, estimated_delivery, purchase_link, contact_name, wechat, notes, image_url,
+created_at, updated_at
+```
+索引: idx_procurement_sku_uq
+
+### suppliers (2条)
+```
+id PK, name, seller_id(关联匹配键), purchase_link, contact_name, wechat,
+created_at, updated_at
+```
+
+### warehouse_inventory (60条)
+```
+id PK, reference_code(GD-2068-09), warehouse_name(CrossBorder/NewProducts/LuxeLocks/VelouraHair),
+available_inventory, in_transit_total, ...(其他字段)
+```
+索引: idx_warehouse_name, idx_warehouse_ref
+
+### sku_mapping (3条)
+```
+id PK, shopify_simple_sku UNIQUE, cross_border_simple_sku,
+luxelocks_simple_sku, velourahair_simple_sku
+```
+
+### reminders (1条)
+```
+id PK, title, content, remind_date(YYYY-MM-DD), email, sent(0/1),
+repeat_type(''/monthly/weekly), repeat_day
+```
+
+### 其他表
+sync_log(128条), headhaul_orders(0条), important_matters(3条), inventory_log(0条)
+
+---
+
+## 核心函数
+
+### simplify_sku(sku) → str
+```python
+match = re.search(r'(\d+-\d+)', sku)
+return match.group(1) if match else sku
+# SWLC2068-9BL18 → 2068-9
+```
+
+### get_db()
+```python
+conn = sqlite3.connect(str(DB_PATH), timeout=30)
+conn.row_factory = sqlite3.Row  # row['col']访问
+conn.execute("PRAGMA busy_timeout=30000")
+return conn
+# 必须 finally: conn.close()
+```
+
+### ShopifyConnector实例 (shopify)
+- get_products(limit) / get_orders(limit,status) / get(path)
+- set_inventory(inventory_item_id, location_id, available, variant_id) — 自动开启跟踪+连接
+- untrack_variant(variant_id) — 取消跟踪继续卖
+- refresh_token() — 24h过期，启动时自动刷新
+
+### OMS
+```python
+await oms_call("/v1/integratedInventory/pageOpen", {"page":1,"pageSize":50})
+await oms_call("/v1/outboundOrder/pageList", {...})
+```
+
+### 模板
+```python
+render_html("模板.html", request, key=val)
+# 用 {% for %} 构建 JS 数组，禁止内联 {{ r|tojson|safe }} 在 HTML 属性
+```
+
+---
+
+## 关键数据流
+
+### 库存匹配链
+```
+SKU: SWLC2068-9BL18 → simplify("2068-9")
+→ sku_mapping.shopify_simple="2068-9" → cross_border_simple="2068-09"
+→ warehouse.ref="GD-2068-09" → simplify("2068-09")
+→ 以简化SKU为key匹配!
+```
+
+### 运输类型(订单同步时固化)
+```
+line_items → simplify(sku) → sku_mapping → warehouse
+→ available>0 → "海外仓发货", 否则 "国内直发"
+```
+
+### 库存同步到Shopify (📤按钮)
+```
+cross_inv{simplified_sku: total_avail} ← warehouse_inventory汇总
+→ products遍历: avail>0 → track+set / avail=0且OMS管理 → untrack / 其他 → skip
+→ 本地 inventory_quantity 同步更新
+```
+
+---
+
+## 路由总览
+
+| 路由 | 页面 | 模板 |
+|------|------|------|
+| `/` | 首页 | dashboard.html |
+| `/orders` | 订单 | orders.html |
+| `/order/{id}` | 订单详情 | order_detail.html |
+| `/products` | 产品 | products.html |
+| `/procurement` | 采购池 | procurement.html |
+| `/suppliers` | 供应商 | suppliers.html |
+| `/media` | 素材 | media.html |
+| `/reminders` | 提醒 | reminders.html |
+| `/headhaul` | 头程 | headhaul.html |
+| `/sku-mapping` | SKU映射 | sku_mapping.html |
+| `/inventory/*` | 库存 | inventory_*.html |
+
+base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
+
+---
+
+## 开发约定
+
+1. **DB**: conn=get_db() → row['col'] → finally conn.close()
+2. **前端**: Jinja2+原生JS，JSON给JS用for循环构建数组
+3. **按钮**: 所有按钮必须有 title 属性
+4. **编码**: GBK→UTF-8，路径用 fsencode/fsdecode
+5. **性能**: 媒体树缓存5min，图片代理缓存 .img_cache/
+6. **新功能**: ALTER TABLE → 路由 → 模板
+7. **同步API**: 可能超时，后台用 asyncio.create_task()
+
+---
+
+## 协作规则
+
+- **⚠️ 开发前先读此文件末尾的变更记录，了解最新状态**
+- **⚠️ 不要和另一个AI同时编辑同一个文件**
+- **⚠️ 每次改动后必须更新下方变更记录**
+- **⚠️ 改动后立即 git commit，让另一方可见**
+
+---
+
+## 变更记录
+
+| 日期 | AI | 改动内容 |
+|------|-----|---------|
+| 2026-06-25 | Codex | 补齐协作基建：新增 memory/MEMORY.md 指向 CLAUDE.md，新增 .gitignore 避免提交 venv/日志/数据库，并准备初始化 git 提交流程 |
+| 2025-06-19 | Claude Code | 初始创建本文件，统一开发指南 |

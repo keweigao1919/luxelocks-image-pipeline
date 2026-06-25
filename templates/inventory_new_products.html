@@ -1,0 +1,112 @@
+﻿{% extends "base.html" %}
+{% block title %}新品页{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:12px">🆕 新品页</h2>
+
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+    <div style="flex:1"></div>
+    <button class="btn btn-primary btn-sm" onclick="showAddRow()">➕ 新增SKU</button>
+    {% if items %}
+    <button class="btn btn-sm" style="background:#e53935;color:#fff" onclick="clearAll()">🗑 清空</button>
+    {% endif %}
+</div>
+
+<!-- 新增行 -->
+<div id="addRow" style="display:none;padding:12px 20px;background:#f0f7ff;border-radius:8px;margin-bottom:16px;align-items:center;gap:8px">
+    <input id="newSku" class="search-box" placeholder="新品SKU 如 SWLC1261-1BR24" style="flex:2">
+    <input id="newAvail" class="search-box" placeholder="可用库存" style="width:100px" type="number" value="0">
+    <input id="newTransit" class="search-box" placeholder="在途库存" style="width:100px" type="number" value="0">
+    <button class="btn btn-primary btn-sm" onclick="addSku()">✅ 添加</button>
+    <button class="btn btn-sm" style="background:#eee" onclick="hideAddRow()">取消</button>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        新品列表 ({{ items|length }} 条)
+        <span style="font-size:12px;color:#888;font-weight:400">手动录入 · 同步到产品页跨境列</span>
+    </div>
+    <div class="card-body">
+        {% if items %}
+        <table>
+            <thead><tr>
+                <th>SKU</th>
+                <th style="color:#2196f3">可用库存</th>
+                <th style="color:#ff9800">在途库存</th>
+                <th style="width:50px">操作</th>
+            </tr></thead>
+            <tbody>
+            {% for item in items %}
+            <tr>
+                <td><strong>{{ item.reference_code or '-' }}</strong></td>
+                <td style="color:#2196f3;font-weight:600;font-size:15px">{{ item.available_inventory }}</td>
+                <td style="color:#ff9800;font-weight:600;font-size:15px">{{ item.in_transit_total }}</td>
+                <td>
+                    <button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#e53935;color:#fff" onclick="delRow({{ item.id }})" title="删除">✕</button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+            {% if totals %}
+            <tfoot>
+            <tr style="background:#f5f6fa;font-weight:700;border-top:2px solid #333">
+                <td style="text-align:right;font-size:14px;color:#333">📊 总计</td>
+                <td style="color:#2196f3;font-size:14px">{{ totals.available }}</td>
+                <td style="color:#ff9800;font-size:14px">{{ totals.transit }}</td>
+                <td></td>
+            </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+        {% else %}
+        <div class="empty">
+            <p>暂无新品</p>
+            <p style="font-size:13px;color:#888">点「➕ 新增SKU」手动添加新品</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function showAddRow(){ document.getElementById('addRow').style.display='flex'; document.getElementById('newSku').focus(); }
+function hideAddRow(){ document.getElementById('addRow').style.display='none'; document.getElementById('newSku').value=''; document.getElementById('newAvail').value=0; document.getElementById('newTransit').value=0; }
+
+async function addSku(){
+    var sku=document.getElementById('newSku').value.trim();
+    if(!sku){ showToast('SKU必填'); return; }
+    var avail=parseInt(document.getElementById('newAvail').value)||0;
+    var transit=parseInt(document.getElementById('newTransit').value)||0;
+    try{
+        var r=await fetch('/api/inventory/new-products/add',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({sku:sku,available:avail,transit:transit})
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function delRow(id){
+    if(!confirm('删除此SKU?')) return;
+    try{
+        var r=await fetch('/api/inventory/new-products/delete',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:id})
+        });
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+
+async function clearAll(){
+    if(!confirm('确定清空全部新品数据?')) return;
+    try{
+        var r=await fetch('/api/inventory/new-products/clear',{method:'POST'});
+        var d=await r.json();
+        if(d.status==='ok'){ location.reload(); }
+        else{ showToast('失败: '+d.message); }
+    }catch(e){ showToast('出错: '+e.message); }
+}
+</script>
+{% endblock %}

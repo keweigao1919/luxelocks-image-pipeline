@@ -1,0 +1,182 @@
+﻿{% extends "base.html" %}
+{% block title %}供应商管理{% endblock %}
+{% block content %}
+<style>
+.sup-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+.sup-table td { vertical-align:middle; }
+.sup-table .action-btn { padding:2px 8px; font-size:11px; border:1px solid #ddd; border-radius:4px; cursor:pointer; background:white; margin:0 2px; }
+.sup-table .action-btn:hover { background:#f0f0f0; }
+.sup-table .action-btn.danger { color:#e53935; border-color:#fce4ec; }
+.sup-table .action-btn.danger:hover { background:#fce4ec; }
+.modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9998; display:flex; align-items:center; justify-content:center; }
+.modal-box { background:white; border-radius:8px; padding:24px; max-width:480px; width:95%; }
+.modal-box h3 { margin-bottom:16px; }
+.form-row { margin-bottom:12px; }
+.form-row label { display:block; font-size:12px; color:#666; margin-bottom:4px; font-weight:600; }
+.form-row input { width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
+.form-row input:focus { outline:none; border-color:#3498db; }
+.form-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+</style>
+
+<h2 style="margin-bottom:4px">🏭 供应商管理</h2>
+<p style="font-size:12px;color:#999;margin-bottom:16px">管理供应商信息，Seller ID 关联采购资源池</p>
+
+<div class="sup-toolbar">
+    <button class="btn btn-green" onclick="showAdd()" title="新增供应商 | 填写供应商名称、Seller ID、采购链接、联系人、微信">＋ 新增</button>
+    <span style="font-size:12px;color:#999">{{ suppliers|length }} 家供应商</span>
+</div>
+
+{% if suppliers %}
+<div class="card">
+    <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="sup-table">
+            <thead>
+                <tr>
+                    <th>供应商</th>
+                    <th>Seller ID</th>
+                    <th>采购链接</th>
+                    <th>联系人</th>
+                    <th>微信</th>
+                    <th style="width:100px">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set idx = namespace(value=0) %}
+                {% for s in suppliers %}
+                <tr>
+                    <td><strong>{{ s.name }}</strong></td>
+                    <td>{{ s.seller_id or '-' }}</td>
+                    <td>
+                        {% if s.purchase_link %}
+                        <a href="{{ s.purchase_link }}" target="_blank" style="font-size:11px;color:#3498db">🔗</a>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>{{ s.contact_name or '-' }}</td>
+                    <td>{{ s.wechat or '-' }}</td>
+                    <td style="white-space:nowrap">
+                        <button class="action-btn" title="编辑该供应商信息 | 修改名称/Seller ID/联系信息" onclick="editByIdx({{ idx.value }})">✏️ 编辑</button>
+                        <button class="action-btn danger" title="删除该供应商 | 操作不可恢复，采购资源池中关联的Seller ID将失效" onclick="delByIdx({{ idx.value }})">🗑</button>
+                    </td>
+                </tr>
+                {% set idx.value = idx.value + 1 %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="empty">📭 暂无供应商，点击「＋ 新增」添加</div>
+{% endif %}
+
+<!-- 新增/编辑弹窗 -->
+<div class="modal-overlay" id="supModal" style="display:none" onclick="if(event.target===this)closeSupModal()">
+    <div class="modal-box">
+        <h3 id="supModalTitle">新增供应商</h3>
+        <input type="hidden" id="supId">
+        <div class="form-row">
+            <label>供应商 <span style="color:#e94560">*</span></label>
+            <input id="supName" placeholder="供应商名称">
+        </div>
+        <div class="form-row">
+            <label>Seller ID</label>
+            <input id="supSellerId" placeholder="Seller ID（关联采购资源池）">
+        </div>
+        <div class="form-row">
+            <label>采购链接</label>
+            <input id="supLink" placeholder="1688 / 淘宝链接">
+        </div>
+        <div class="form-row">
+            <label>联系人</label>
+            <input id="supContact" placeholder="联系人姓名">
+        </div>
+        <div class="form-row">
+            <label>微信</label>
+            <input id="supWechat" placeholder="微信号">
+        </div>
+        <div class="form-actions">
+            <button class="btn" style="background:#eee" onclick="closeSupModal()">取消</button>
+            <button class="btn btn-primary" onclick="saveSupplier()" id="supSaveBtn" title="保存供应商信息 | Seller ID关联采购资源池">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// 供应商数据（避免JSON-in-HTML转义bug）
+var supData = [
+{% for s in suppliers %}
+    {"id":{{ s.id }},"name":{{ s.name | tojson }},"seller_id":{{ s.seller_id | tojson }},"purchase_link":{{ s.purchase_link | tojson }},"contact_name":{{ s.contact_name | tojson }},"wechat":{{ s.wechat | tojson }}}{% if not loop.last %},{% endif %}
+{% endfor %}
+];
+
+function supByIdx(idx){ if(idx>=0 && idx<supData.length) return supData[idx]; return null; }
+
+function editByIdx(idx){ var s = supByIdx(idx); if(s) editSupplier(s); }
+function delByIdx(idx){ var s = supByIdx(idx); if(s) delSupplier(s.id, s.name); }
+
+function showAdd(){
+    document.getElementById('supId').value = '';
+    document.getElementById('supModalTitle').textContent = '新增供应商';
+    document.getElementById('supName').value = '';
+    document.getElementById('supSellerId').value = '';
+    document.getElementById('supLink').value = '';
+    document.getElementById('supContact').value = '';
+    document.getElementById('supWechat').value = '';
+    document.getElementById('supModal').style.display = 'flex';
+    setTimeout(function(){ document.getElementById('supName').focus(); }, 100);
+}
+
+function editSupplier(s){
+    document.getElementById('supId').value = s.id;
+    document.getElementById('supModalTitle').textContent = '编辑: ' + s.name;
+    document.getElementById('supName').value = s.name || '';
+    document.getElementById('supSellerId').value = s.seller_id || '';
+    document.getElementById('supLink').value = s.purchase_link || '';
+    document.getElementById('supContact').value = s.contact_name || '';
+    document.getElementById('supWechat').value = s.wechat || '';
+    document.getElementById('supModal').style.display = 'flex';
+}
+
+function closeSupModal(){
+    document.getElementById('supModal').style.display = 'none';
+}
+
+async function saveSupplier(){
+    var btn = document.getElementById('supSaveBtn');
+    btn.disabled = true; btn.textContent = '保存中...';
+    var id = document.getElementById('supId').value;
+    var data = {
+        name: document.getElementById('supName').value.trim(),
+        seller_id: document.getElementById('supSellerId').value.trim(),
+        purchase_link: document.getElementById('supLink').value.trim(),
+        contact_name: document.getElementById('supContact').value.trim(),
+        wechat: document.getElementById('supWechat').value.trim()
+    };
+    if(!data.name){ showToast('供应商名称必填'); btn.disabled=false; btn.textContent='保存'; return; }
+
+    var url = id ? '/api/suppliers/update' : '/api/suppliers/add';
+    if(id) data.id = parseInt(id);
+
+    try {
+        var r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+        var d = await r.json();
+        if(d.status === 'ok'){ closeSupModal(); location.reload(); }
+        else { showToast('失败: '+d.message); }
+    } catch(e) { showToast('出错: '+e.message); }
+    btn.disabled = false; btn.textContent = '保存';
+}
+
+async function delSupplier(id, name){
+    if(!confirm('确定删除供应商 "'+name+'" ？')) return;
+    try {
+        var r = await fetch('/api/suppliers/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:id})});
+        var d = await r.json();
+        if(d.status === 'ok'){ showToast('已删除'); location.reload(); }
+        else { showToast('失败: '+d.message); }
+    } catch(e) { showToast('出错: '+e.message); }
+}
+
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape') closeSupModal();
+});
+</script>
+{% endblock %}

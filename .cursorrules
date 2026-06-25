@@ -1,0 +1,4 @@
+# Cursor Rules → 请先读 CLAUDE.md
+
+本项目使用 `CLAUDE.md` 作为 Claude Code 和 Codex 的共用开发指南。
+开始工作前请阅读 `CLAUDE.md` 获取完整的数据库结构、业务逻辑和开发约定。

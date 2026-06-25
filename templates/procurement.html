@@ -1,0 +1,555 @@
+﻿{% extends "base.html" %}
+{% block title %}采购资源信息池{% endblock %}
+{% block content %}
+<style>
+.proc-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.proc-table th { white-space:nowrap; }
+.proc-table td { vertical-align:middle; }
+.proc-table .sku-thumb { width:48px; height:48px; border-radius:4px; object-fit:cover; background:#f5f6fa; }
+.proc-table .sku-noimg { width:48px; height:48px; border-radius:4px; background:#f5f6fa; display:flex; align-items:center; justify-content:center; font-size:20px; }
+.proc-table .link-btn { font-size:11px; color:#3498db; text-decoration:none; cursor:pointer; }
+.proc-table .link-btn:hover { text-decoration:underline; }
+.proc-table .action-btn { padding:2px 8px; font-size:11px; border:1px solid #ddd; border-radius:4px; cursor:pointer; background:white; margin:0 2px; }
+.proc-table .action-btn:hover { background:#f0f0f0; }
+.proc-table .action-btn.danger { color:#e53935; border-color:#fce4ec; }
+.proc-table .action-btn.danger:hover { background:#fce4ec; }
+.proc-table tr.edit-mode-row { cursor:pointer; }
+.proc-table tr.edit-mode-row:hover { background:#e3f2fd !important; }
+.proc-table tr.edit-mode-row:hover td { border-color:#bbdefb; }
+.proc-table .cost-cell { font-weight:600; color:#e94560; }
+.modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9998; display:flex; align-items:center; justify-content:center; }
+.modal-box { background:white; border-radius:8px; padding:24px; max-width:560px; width:95%; max-height:90vh; overflow-y:auto; }
+.modal-box h3 { margin-bottom:16px; }
+.form-row { margin-bottom:12px; }
+.form-row label { display:block; font-size:12px; color:#666; margin-bottom:4px; font-weight:600; }
+.form-row input, .form-row textarea { width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
+.form-row input:focus, .form-row textarea:focus { outline:none; border-color:#3498db; }
+.form-row textarea { min-height:60px; resize:vertical; }
+.form-row .form-hint { font-size:11px; color:#999; margin-top:2px; }
+.form-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+.import-result { padding:8px 12px; border-radius:6px; margin-top:8px; font-size:12px; }
+.import-result.ok { background:#e8f5e9; color:#27ae60; }
+.import-result.err { background:#fce4ec; color:#e53935; }
+</style>
+
+<h2 style="margin-bottom:4px">🛒 采购资源信息池</h2>
+<p style="font-size:12px;color:#999;margin-bottom:16px">管理产品采购来源：供应商、成本、联系方式等</p>
+
+<div class="proc-toolbar">
+    <input id="procSearch" class="search-box" placeholder="搜索简化SKU / 供应商 / 联系人..." title="输入关键词搜索采购资源 | 匹配简化SKU/供应商/联系人/备注/SellerID"
+           value="{{ search or '' }}" onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="btn btn-primary" onclick="doSearch()" title="按简化SKU/供应商/联系人模糊搜索采购资源">🔍 搜索</button>
+    <button class="btn btn-green" onclick="showAdd()" title="手动新增采购资源 | 填写简化SKU、供应商、成本等信息">＋ 新增</button>
+    <button class="btn" style="background:#3498db;color:#fff" onclick="toggleEditMode()" id="editModeBtn" title="进入编辑模式 | 点击任意行弹出编辑窗，修改供应商/成本/联系方式等信息">✏️ 编辑</button>
+    <button class="btn" style="background:#f39c12;color:#fff" onclick="showImport()" title="数据来源：产品管理SKU列表 | 勾选产品批量导入采购池，已导入的自动跳过">📦 从产品导入</button>
+    {% if search %}
+    <a href="/procurement" class="btn" style="background:#eee">清除筛选</a>
+    {% endif %}
+</div>
+
+{% if resources %}
+<div class="card">
+    <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="proc-table">
+            <thead>
+                <tr>
+                    <th>图片</th>
+                    <th>简化SKU</th>
+                    <th>供应商</th>
+                    <th>Seller ID</th>
+                    <th>采购成本</th>
+                    <th>预计发货</th>
+                    <th>采购链接</th>
+                    <th>联系人</th>
+                    <th>微信</th>
+                    <th>备注</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set idx = namespace(value=0) %}
+                {% for r in resources %}
+                <tr class="proc-row" data-pidx="{{ idx.value }}" onclick="editModeRowClick(this)">
+                    <td>
+                        {% if r.image_url %}
+                        <img class="sku-thumb" src="{{ r.image_url }}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=sku-noimg>📷</div>'">
+                        {% else %}
+                        <div class="sku-noimg">📷</div>
+                        {% endif %}
+                    </td>
+                    <td><strong>{{ r.simple_sku }}</strong></td>
+                    <td>{{ r.supplier or '-' }}</td>
+                    <td style="font-size:11px;color:#888">{{ r.seller_id or '-' }}</td>
+                    <td class="cost-cell">{% if r.cost %}¥{{ '%.2f'|format(r.cost) }}{% else %}-{% endif %}</td>
+                    <td>{{ r.estimated_delivery or '-' }}</td>
+                    <td>
+                        {% if r.purchase_link %}
+                        <a class="link-btn" href="{{ r.purchase_link }}" target="_blank">🔗 打开</a>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>{{ r.contact_name or '-' }}</td>
+                    <td>{{ r.wechat or '-' }}</td>
+                    <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.notes }}">{{ r.notes or '-' }}</td>
+                    <td style="white-space:nowrap" onclick="event.stopPropagation()">
+                        <button class="action-btn" title="编辑该采购资源 | 修改供应商/成本/联系方式" onclick="editByIdx({{ idx.value }});event.stopPropagation()">✏️ 编辑</button>
+                        <button class="action-btn" style="color:#3498db;border-color:#e3f2fd" title="查看本地素材图片 | 匹配文件夹和文件名包含该简化SKU" onclick="showMedia('{{ r.simple_sku }}');event.stopPropagation()">📷 素材</button>
+                        <button class="action-btn danger" title="删除该采购资源 | 操作不可恢复" onclick="delByIdx({{ idx.value }});event.stopPropagation()">🗑</button>
+                    </td>
+                </tr>
+                {% set idx.value = idx.value + 1 %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="empty">📭 暂无采购资源，点击「＋ 新增」或「📦 从产品导入」</div>
+{% endif %}
+
+<!-- 新增/编辑弹窗 -->
+<div class="modal-overlay" id="editModal" style="display:none" onclick="if(event.target===this)closeModal()">
+    <div class="modal-box">
+        <h3 id="editModalTitle">新增采购资源</h3>
+        <input type="hidden" id="editId">
+        <div class="form-row">
+            <label>简化SKU <span style="color:#e94560">*</span></label>
+            <input id="editSku" placeholder="例如: 2068-9">
+        </div>
+        <div class="form-row">
+            <label>图片URL</label>
+            <input id="editImg" placeholder="产品图片链接">
+            <div class="form-hint">可从产品库导入自动填充</div>
+        </div>
+        <div class="form-row">
+            <label>供应商</label>
+            <input id="editSupplier" placeholder="供应商名称（手动填写）">
+        </div>
+        <div class="form-row">
+            <label>Seller ID (关联供应商)</label>
+            <select id="editSellerId" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px" onchange="onSellerChange()">
+                <option value="">-- 选择供应商（自动填充信息）--</option>
+                {% for sup in suppliers %}
+                <option value="{{ sup.seller_id }}" data-link="{{ sup.purchase_link or '' }}" data-contact="{{ sup.contact_name or '' }}" data-wechat="{{ sup.wechat or '' }}" data-name="{{ sup.name }}">{{ sup.name }}{% if sup.seller_id %} ({{ sup.seller_id }}){% endif %}</option>
+                {% endfor %}
+            </select>
+            <div class="form-hint">选择后自动填充采购链接/联系人/微信</div>
+        </div>
+        <div class="form-row">
+            <label>采购成本 (¥)</label>
+            <input id="editCost" type="number" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-row">
+            <label>预计发货</label>
+            <input id="editDelivery" placeholder="例如: 3-5天 / 2026-06-20">
+        </div>
+        <div class="form-row">
+            <label>采购链接</label>
+            <input id="editLink" placeholder="1688 / 淘宝链接">
+        </div>
+        <div class="form-row">
+            <label>联系人</label>
+            <input id="editContact" placeholder="联系人姓名">
+        </div>
+        <div class="form-row">
+            <label>微信</label>
+            <input id="editWechat" placeholder="微信号">
+        </div>
+        <div class="form-row">
+            <label>备注</label>
+            <textarea id="editNotes" placeholder="其他备注信息"></textarea>
+        </div>
+        <div class="form-actions">
+            <button class="btn" style="background:#eee" onclick="closeModal()">取消</button>
+            <button class="btn btn-primary" onclick="saveResource()" id="saveBtn" title="保存采购资源 | 重复SKU自动更新而非新增">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- 素材图片预览弹窗 -->
+<div class="modal-overlay" id="mediaModal" style="display:none" onclick="if(event.target===this)closeMedia()">
+    <div class="modal-box" style="max-width:800px">
+        <h3 id="mediaModalTitle">📷 素材图片</h3>
+        <div id="mediaGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;max-height:500px;overflow-y:auto"></div>
+        <div id="mediaEmpty" style="text-align:center;padding:30px;color:#999;display:none">📭 未找到该SKU的本地素材</div>
+        <div class="form-actions">
+            <button class="btn" style="background:#eee" onclick="closeMedia()">关闭</button>
+            <button class="btn" style="background:#3498db;color:#fff" onclick="openMediaFolder()" id="openFolderBtn" disabled>📁 在素材管理打开</button>
+        </div>
+    </div>
+</div>
+
+<!-- 从产品导入弹窗（勾选模式） -->
+<div class="modal-overlay" id="importModal" style="display:none" onclick="if(event.target===this)closeImport()">
+    <div class="modal-box" style="max-width:680px">
+        <h3>📦 从产品导入 (勾选)</h3>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input id="importSearch" class="search-box" style="flex:1" placeholder="搜索产品SKU或名称..." onkeydown="if(event.key==='Enter')loadProductList()">
+            <button class="btn btn-primary" onclick="loadProductList()">🔍</button>
+            <button class="btn" style="background:#eee" onclick="loadProductList()">全部</button>
+        </div>
+        <div style="max-height:360px;overflow-y:auto;border:1px solid #eee;border-radius:6px" id="productListBox">
+            <div style="text-align:center;padding:30px;color:#999">⏳ 加载产品列表中...</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+            <label style="font-size:12px;color:#666;cursor:pointer"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> 全选</label>
+            <span style="font-size:12px;color:#999" id="importCount">已选 0 项</span>
+        </div>
+        <div class="form-actions">
+            <button class="btn" style="background:#eee" onclick="closeImport()">取消</button>
+            <button class="btn btn-primary" onclick="importSelected()" id="importBtn" title="将勾选的产品批量导入采购资源池 | 自动填充简化SKU和图片URL">导入选中</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══════ 所有采购资源数据（JS数组，无JSON-in-HTML转义问题）═══════
+var procData = [
+{% for r in resources %}
+    {"id":{{ r.id }},"simple_sku":{{ r.simple_sku | tojson }},"image_url":{{ r.image_url | tojson }},"supplier":{{ r.supplier | tojson }},"seller_id":{{ r.seller_id | tojson }},"supplier_name":{{ r.get('supplier_name', '') | tojson }},"cost":{{ r.cost | tojson }},"estimated_delivery":{{ r.estimated_delivery | tojson }},"purchase_link":{{ r.purchase_link | tojson }},"contact_name":{{ r.contact_name | tojson }},"wechat":{{ r.wechat | tojson }},"notes":{{ r.notes | tojson }}}{% if not loop.last %},{% endif %}
+{% endfor %}
+];
+
+function lookupByIdx(idx){
+    if(idx >= 0 && idx < procData.length) return procData[idx];
+    return null;
+}
+
+function delByIdx(idx){
+    var r = lookupByIdx(idx);
+    if(r) delResource(r.id, r.simple_sku);
+}
+
+function editByIdx(idx){
+    var r = lookupByIdx(idx);
+    if(r) showEdit(r);
+}
+
+// ── 搜索 ──
+function doSearch(){
+    var q = document.getElementById('procSearch').value.trim();
+    if(q) window.location.href = '/procurement?search=' + encodeURIComponent(q);
+    else window.location.href = '/procurement';
+}
+
+// ── 编辑模式 ──
+var editMode = false;
+function toggleEditMode(){
+    editMode = !editMode;
+    var btn = document.getElementById('editModeBtn');
+    var rows = document.querySelectorAll('.proc-row');
+    if(editMode){
+        btn.textContent = '取消编辑';
+        btn.style.background = '#e53935';
+        rows.forEach(function(r){ r.classList.add('edit-mode-row'); });
+        showToast('点击任意行即可编辑');
+    } else {
+        btn.textContent = '✏️ 编辑';
+        btn.style.background = '#3498db';
+        rows.forEach(function(r){ r.classList.remove('edit-mode-row'); });
+    }
+}
+function editModeRowClick(row){
+    if(!editMode) return;
+    var idx = parseInt(row.getAttribute('data-pidx'));
+    if(!isNaN(idx)){
+        var r = lookupByIdx(idx);
+        if(r) showEdit(r);
+    }
+}
+
+// ── 新增/编辑弹窗 ──
+function showAdd(){
+    document.getElementById('editId').value = '';
+    document.getElementById('editModalTitle').textContent = '新增采购资源';
+    document.getElementById('editSku').value = '';
+    document.getElementById('editImg').value = '';
+    document.getElementById('editSupplier').value = '';
+    document.getElementById('editSellerId').value = '';
+    document.getElementById('editCost').value = '';
+    document.getElementById('editDelivery').value = '';
+    document.getElementById('editLink').value = '';
+    document.getElementById('editContact').value = '';
+    document.getElementById('editWechat').value = '';
+    document.getElementById('editNotes').value = '';
+    document.getElementById('editModal').style.display = 'flex';
+    setTimeout(function(){ document.getElementById('editSku').focus(); }, 100);
+}
+
+function showEdit(r){
+    document.getElementById('editId').value = r.id;
+    document.getElementById('editModalTitle').textContent = '编辑: ' + r.simple_sku;
+    document.getElementById('editSku').value = r.simple_sku || '';
+    document.getElementById('editImg').value = r.image_url || '';
+    document.getElementById('editSupplier').value = r.supplier || '';
+    document.getElementById('editSellerId').value = r.seller_id || '';
+    document.getElementById('editCost').value = r.cost || '';
+    document.getElementById('editDelivery').value = r.estimated_delivery || '';
+    document.getElementById('editLink').value = r.purchase_link || '';
+    document.getElementById('editContact').value = r.contact_name || '';
+    document.getElementById('editWechat').value = r.wechat || '';
+    document.getElementById('editNotes').value = r.notes || '';
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+// 选择供应商后自动填充
+function onSellerChange(){
+    var sel = document.getElementById('editSellerId');
+    var opt = sel.options[sel.selectedIndex];
+    if(!opt || !opt.value) return;
+    document.getElementById('editLink').value = opt.getAttribute('data-link') || '';
+    document.getElementById('editContact').value = opt.getAttribute('data-contact') || '';
+    document.getElementById('editWechat').value = opt.getAttribute('data-wechat') || '';
+    var supName = opt.getAttribute('data-name') || '';
+    if(supName && !document.getElementById('editSupplier').value){
+        document.getElementById('editSupplier').value = supName;
+    }
+}
+
+function closeModal(){
+    document.getElementById('editModal').style.display = 'none';
+    if(editMode) toggleEditMode();
+}
+
+async function saveResource(){
+    var btn = document.getElementById('saveBtn');
+    btn.disabled = true; btn.textContent = '保存中...';
+    var id = document.getElementById('editId').value;
+    var data = {
+        simple_sku: document.getElementById('editSku').value.trim(),
+        image_url: document.getElementById('editImg').value.trim(),
+        supplier: document.getElementById('editSupplier').value.trim(),
+        seller_id: document.getElementById('editSellerId').value,
+        cost: document.getElementById('editCost').value,
+        estimated_delivery: document.getElementById('editDelivery').value.trim(),
+        purchase_link: document.getElementById('editLink').value.trim(),
+        contact_name: document.getElementById('editContact').value.trim(),
+        wechat: document.getElementById('editWechat').value.trim(),
+        notes: document.getElementById('editNotes').value.trim()
+    };
+    if(!data.simple_sku){ showToast('简化SKU必填'); btn.disabled=false; btn.textContent='保存'; return; }
+
+    var url = id ? '/api/procurement/update' : '/api/procurement/add';
+    if(id) data.id = parseInt(id);
+
+    try {
+        var r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+        var d = await r.json();
+        if(d.status === 'ok'){ closeModal(); location.reload(); }
+        else { showToast('失败: '+d.message); }
+    } catch(e) { showToast('出错: '+e.message); }
+    btn.disabled = false; btn.textContent = '保存';
+}
+
+async function delResource(id, sku){
+    if(!confirm('确定删除 "'+sku+'" 的采购资源？')) return;
+    try {
+        var r = await fetch('/api/procurement/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:id})});
+        var d = await r.json();
+        if(d.status === 'ok'){ showToast('已删除'); location.reload(); }
+        else { showToast('失败: '+d.message); }
+    } catch(e) { showToast('出错: '+e.message); }
+}
+
+// ── 从产品导入（勾选模式）──
+var importProductList = [];  // 当前加载的产品列表 {simple_sku, full_sku, title, image_url}
+var importChecked = {};     // simple_sku -> true
+
+function showImport(){
+    document.getElementById('importModal').style.display = 'flex';
+    document.getElementById('importSearch').value = '';
+    importChecked = {};
+    loadProductList();
+    setTimeout(function(){ document.getElementById('importSearch').focus(); }, 200);
+}
+
+function closeImport(){
+    document.getElementById('importModal').style.display = 'none';
+}
+
+async function loadProductList(){
+    var kw = document.getElementById('importSearch').value.trim();
+    var url = '/api/procurement/product-list';
+    if(kw) url += '?search=' + encodeURIComponent(kw);
+    var box = document.getElementById('productListBox');
+    box.innerHTML = '<div style="text-align:center;padding:30px;color:#999">⏳ 加载中...</div>';
+    try {
+        var r = await fetch(url); var d = await r.json();
+        if(d.status !== 'ok'){ box.innerHTML = '<div style="text-align:center;padding:30px;color:#e53935">加载失败</div>'; return; }
+        importProductList = d.products || [];
+        importChecked = {};  // 重置勾选
+        renderProductList();
+    } catch(e) {
+        box.innerHTML = '<div style="text-align:center;padding:30px;color:#e53935">出错: '+e.message+'</div>';
+    }
+}
+
+function renderProductList(){
+    var box = document.getElementById('productListBox');
+    var list = importProductList;
+    if(list.length === 0){
+        box.innerHTML = '<div style="text-align:center;padding:30px;color:#999">📭 未找到产品</div>';
+        return;
+    }
+    var importedCount = 0;
+    var html = '<table style="width:100%"><tbody>';
+    for(var i=0; i<list.length; i++){
+        var p = list[i];
+        var isImported = p.already_imported;
+        if(isImported) importedCount++;
+        var checked = importChecked[p.simple_sku] ? 'checked' : '';
+        var disabled = isImported ? 'disabled' : '';
+        var imgTag = p.image_url
+            ? '<img src="'+p.image_url+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px" onerror="this.style.display=\'none\'">'
+            : '<span style="font-size:18px">📷</span>';
+        var rowStyle = isImported ? 'background:#f9f9f9;cursor:default' : 'cursor:pointer;border-bottom:1px solid #f0f0f0';
+        html += '<tr style="'+rowStyle+'" onclick="'+ (isImported ? '' : 'toggleCheck(\''+p.simple_sku.replace(/'/g,"\\'")+'\')') +'">';
+        html += '<td style="width:36px"><input type="checkbox" '+checked+' '+disabled+' onclick="event.stopPropagation();'+ (isImported ? '' : 'toggleCheck(\''+p.simple_sku.replace(/'/g,"\\'")+'\')') +'"></td>';
+        html += '<td style="width:44px">'+imgTag+'</td>';
+        html += '<td style="font-size:13px;font-weight:600;color:#e94560">'+p.simple_sku+'</td>';
+        html += '<td style="font-size:12px;color:#666;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.title+'</td>';
+        html += '<td style="font-size:11px;text-align:right">'+(isImported ? '<span style="color:#27ae60;font-weight:600">✅ 已导入</span>' : '')+'</td>';
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    if(importedCount > 0){
+        html += '<div style="padding:8px 12px;background:#e8f5e9;font-size:11px;color:#27ae60">✅ '+importedCount+' 个产品已导入，不可重复选择</div>';
+    }
+    box.innerHTML = html;
+    updateImportCount();
+}
+
+function toggleCheck(sku){
+    // 检查是否已导入
+    for(var i=0; i<importProductList.length; i++){
+        if(importProductList[i].simple_sku === sku && importProductList[i].already_imported) return;
+    }
+    if(importChecked[sku]) delete importChecked[sku];
+    else importChecked[sku] = true;
+    updateImportCount();
+    var box = document.getElementById('productListBox');
+    var cbs = box.querySelectorAll('input[type=checkbox]');
+    for(var i=0; i<cbs.length; i++){
+        var rowSku = importProductList[i] ? importProductList[i].simple_sku : '';
+        cbs[i].checked = !!importChecked[rowSku];
+    }
+}
+
+function toggleSelectAll(){
+    var all = document.getElementById('selectAll').checked;
+    importChecked = {};
+    if(all){
+        for(var i=0; i<importProductList.length; i++){
+            if(!importProductList[i].already_imported){
+                importChecked[importProductList[i].simple_sku] = true;
+            }
+        }
+    }
+    renderProductList();
+}
+
+function updateImportCount(){
+    var count = Object.keys(importChecked).length;
+    document.getElementById('importCount').textContent = '已选 ' + count + ' 项';
+    document.getElementById('importBtn').textContent = count > 0 ? ('导入选中 ('+count+')') : '导入选中';
+    document.getElementById('importBtn').disabled = count === 0;
+}
+
+async function importSelected(){
+    var selected = Object.keys(importChecked);
+    if(selected.length === 0){ showToast('请先勾选产品'); return; }
+    var btn = document.getElementById('importBtn');
+    btn.disabled = true; btn.textContent = '导入中...';
+    var ok = 0, fail = 0;
+    for(var i=0; i<selected.length; i++){
+        var sku = selected[i];
+        // 从列表中取完整信息
+        var info = null;
+        for(var j=0; j<importProductList.length; j++){
+            if(importProductList[j].simple_sku === sku){ info = importProductList[j]; break; }
+        }
+        if(!info){ fail++; continue; }
+        var data = {
+            simple_sku: info.simple_sku,
+            image_url: info.image_url,
+            supplier: '', cost: 0, estimated_delivery: '',
+            purchase_link: '', contact_name: '', wechat: '', notes: ''
+        };
+        try {
+            var r = await fetch('/api/procurement/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+            var d = await r.json();
+            if(d.status === 'ok') ok++; else fail++;
+        } catch(e) { fail++; }
+    }
+    closeImport();
+    showToast('导入完成: '+ok+' 成功'+(fail>0?', '+fail+' 失败':''));
+    if(ok > 0) setTimeout(function(){ location.reload(); }, 800);
+}
+
+// ── 素材图片查看 ──
+var currentMediaSku = '';
+async function showMedia(sku){
+    currentMediaSku = sku;
+    document.getElementById('mediaModalTitle').textContent = '📷 素材: ' + sku;
+    document.getElementById('mediaGrid').innerHTML = '<div style="text-align:center;padding:30px;color:#999">⏳ 搜索中...</div>';
+    document.getElementById('mediaEmpty').style.display = 'none';
+    document.getElementById('openFolderBtn').disabled = true;
+    document.getElementById('mediaModal').style.display = 'flex';
+    try {
+        var r = await fetch('/api/media/by-sku?sku=' + encodeURIComponent(sku));
+        var d = await r.json();
+        var grid = document.getElementById('mediaGrid');
+        if(d.status === 'ok' && d.images.length > 0){
+            document.getElementById('openFolderBtn').disabled = false;
+            var html = '';
+            for(var i=0; i<d.images.length; i++){
+                var img = d.images[i];
+                var url = '/api/media/preview?path=' + encodeURIComponent(img);
+                html += '<div style="border:1px solid #eee;border-radius:6px;overflow:hidden;cursor:pointer" onclick="window.open(\''+url+'\',\'_blank\')" title="'+img+'">';
+                html += '<img src="'+url+'" style="width:100%;height:120px;object-fit:cover" loading="lazy" onerror="this.parentElement.innerHTML=\'<div style=height:120px;display:flex;align-items:center;justify-content:center;color:#999>📄</div>\'">';
+                html += '<div style="padding:4px 6px;font-size:10px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+img.split('/').pop()+'</div>';
+                html += '</div>';
+            }
+            grid.innerHTML = html;
+        } else {
+            grid.innerHTML = '';
+            document.getElementById('mediaEmpty').style.display = 'block';
+            document.getElementById('mediaEmpty').textContent = '📭 本地未找到 SKU "'+sku+'" 的素材图片';
+        }
+    } catch(e) {
+        document.getElementById('mediaGrid').innerHTML = '';
+        document.getElementById('mediaEmpty').style.display = 'block';
+        document.getElementById('mediaEmpty').textContent = '搜索出错: '+e.message;
+    }
+}
+function closeMedia(){ document.getElementById('mediaModal').style.display = 'none'; }
+function openMediaFolder(){ window.open('/media', '_blank'); }
+
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){
+        closeModal();
+        closeImport();
+        closeMedia();
+    }
+});
+
+// 从产品页传来的自动导入（直接查API填表，不加载全部产品列表）
+(function(){
+    var params = new URLSearchParams(window.location.search);
+    var autoSku = params.get('import');
+    if(autoSku){
+        // 直接用快速查询API获取产品信息，填入编辑表单
+        fetch('/api/procurement/import-from-product?sku=' + encodeURIComponent(autoSku))
+        .then(function(r){ return r.json(); })
+        .then(function(d){
+            if(d.status === 'ok'){
+                showAdd();
+                document.getElementById('editModalTitle').textContent = '新建采购资源 (从产品导入)';
+                document.getElementById('editSku').value = d.simple_sku;
+                document.getElementById('editImg').value = d.image_url;
+                showToast('已从产品导入: ' + d.simple_sku, 2000);
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

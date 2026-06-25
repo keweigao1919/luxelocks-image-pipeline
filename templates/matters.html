@@ -1,0 +1,66 @@
+﻿{% extends "base.html" %}
+{% block title %}待办事项{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:16px">📝 待办事项</h2>
+
+<div class="card" style="margin-bottom:16px">
+    <div class="card-body" style="padding:14px 20px">
+        <div style="display:flex;gap:8px">
+            <input id="matterInput" class="search-box" placeholder="输入待办事项，回车添加..." style="flex:1;font-size:15px;border:none;box-shadow:none;outline:none" onkeydown="if(event.key==='Enter')addMatter()" autofocus>
+            <button class="btn btn-primary" onclick="addMatter()" title="添加待办事项 | 回车或点击添加，记录到待办列表">添加</button>
+        </div>
+    </div>
+</div>
+
+{% set pending = matters|selectattr('status','equalto','pending')|list %}
+{% set done = matters|selectattr('status','equalto','done')|list %}
+
+<div class="card">
+    <div class="card-header">
+        <span style="font-size:13px;color:#888;font-weight:400">
+            {{ pending|length }} 项待完成 · {{ done|length }} 项已完成
+        </span>
+    </div>
+    <div class="card-body" style="padding:0">
+        {% if matters %}
+        <div style="max-height:600px;overflow-y:auto">
+            {% for m in pending %}
+            <div class="matter-row" style="display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid #f0f0f0;cursor:default" onclick="toggleCheck(this,{{ m.id }})">
+                <span class="matter-check" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:2px solid #d0d0d0;border-radius:50%;flex-shrink:0;transition:0.2s">　</span>
+                <span class="matter-text" style="flex:1;margin-left:14px;font-size:15px">{{ m.title }}</span>
+                <span style="font-size:12px;color:#999;font-weight:600;margin-right:4px">{{ m.created_at[:10] if m.created_at else '' }}</span>
+                <button class="matter-del" onclick="event.stopPropagation();delMatter({{ m.id }})" style="background:none;border:none;color:#ccc;cursor:pointer;font-size:16px;padding:4px 6px;visibility:hidden" title="删除">×</button>
+            </div>
+            {% endfor %}
+
+            {% if done %}
+            <div style="padding:8px 20px;font-size:11px;color:#bbb;background:#fafafa;border-bottom:1px solid #f0f0f0">{{ done|length }} 项已完成</div>
+            {% for m in done %}
+            <div class="matter-row" style="display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid #f5f5f5;background:#fafafa;cursor:default" onclick="toggleCheck(this,{{ m.id }})">
+                <span class="matter-check" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:2px solid #27ae60;border-radius:50%;flex-shrink:0;background:#27ae60;transition:0.2s">
+                    <span style="color:white;font-size:12px">✓</span>
+                </span>
+                <span class="matter-text" style="flex:1;margin-left:14px;font-size:15px;text-decoration:line-through;color:#bbb">{{ m.title }}</span>
+                <span style="font-size:12px;color:#999;font-weight:600;margin-right:4px">{{ m.created_at[:10] if m.created_at else '' }}</span>
+                <button class="matter-del" onclick="event.stopPropagation();delMatter({{ m.id }})" style="background:none;border:none;color:#ddd;cursor:pointer;font-size:16px;padding:4px 6px;visibility:hidden" title="删除">×</button>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="empty" style="padding:80px;color:#e0e0e0;font-size:40px">📋</div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.matter-row:hover { background: #f8f9ff !important; }
+.matter-row:hover .matter-del { visibility: visible !important; }
+.matter-row:hover .matter-check { border-color: #27ae60; }
+</style>
+<script>
+async function addMatter(){ var t=document.getElementById('matterInput').value.trim(); if(!t)return; try{ var r=await fetch('/api/matters/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:t,remind_at:new Date().toISOString()})}); if(r.ok){ location.reload(); } }catch(e){} }
+async function toggleCheck(row,id){ var span=row.querySelector('.matter-check'); var text=row.querySelector('.matter-text'); var isDone=span.style.background==='rgb(39, 174, 96)'; try{ var r=await fetch('/api/matters/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})}); if(r.ok){ location.reload(); } }catch(e){} }
+async function delMatter(id){ if(!confirm('删除?'))return; await fetch('/api/matters/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:id})}); location.reload(); }
+</script>
+{% endblock %}

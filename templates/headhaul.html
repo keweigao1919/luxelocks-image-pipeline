@@ -1,0 +1,60 @@
+﻿{% extends "base.html" %}
+{% block title %}头程管理{% endblock %}
+{% block content %}
+<h2 style="margin-bottom:16px">🚢 头程管理</h2>
+
+<div class="stats col3">
+    <div class="stat-card"><div class="label">总票数</div><div class="value" style="color:#2c3e50">{{ stats.total }}</div></div>
+    <div class="stat-card"><div class="label">运输中</div><div class="value" style="color:#2196f3">{{ stats.in_transit }}</div></div>
+    <div class="stat-card"><div class="label">已签收</div><div class="value" style="color:#27ae60">{{ stats.delivered }}</div></div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        查询运单
+    </div>
+    <div class="card-body">
+        <div style="display:flex;gap:8px">
+            <input id="lookupPackno" class="search-box" placeholder="输入运单号/客户单号查询" style="flex:1">
+            <button class="btn btn-primary btn-sm" onclick="lookupHeadhaul()" title="数据来源：华威尔TMS API | 根据运单号查询物流轨迹和状态">🔍 查询</button>
+            <button class="btn btn-green btn-sm" onclick="syncHeadhaul()" title="数据来源：华威尔TMS API | 刷新已保存头程运单的最新状态">🔄 刷新已存</button>
+        </div>
+        <div id="lookupResult" style="margin-top:12px;display:none"></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        头程单列表
+        <div>
+            <button class="btn btn-primary btn-sm" onclick="syncHeadhaul()">🔄 刷新全部</button>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if orders %}
+        <table>
+            <thead><tr><th>客户单号</th><th>转单号</th><th>运单号</th><th>渠道</th><th>状态</th><th>目的地</th><th>时间</th></tr></thead>
+            <tbody>
+            {% for o in orders %}
+            <tr>
+                <td><strong>{{ o.customer_order_no or '-' }}</strong></td>
+                <td>{{ o.transfer_order_no or '-' }}</td>
+                <td>{{ o.tracking_number or '-' }}</td>
+                <td>{{ o.shipping_channel or '-' }}</td>
+                <td><span class="badge {% if o.status == 'delivered' %}badge-shipped{% elif o.status == 'in_transit' %}badge-info{% else %}badge-pending{% endif %}">{{ o.status }}</span></td>
+                <td>{{ o.destination or '-' }}</td>
+                <td style="color:#999;font-size:12px">{{ o.created_at[:16] if o.created_at else '-' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty"><p>暂无头程数据</p><br><button class="btn btn-primary" onclick="syncHeadhaul()">🔄 从华威尔同步数据</button></div>
+        {% endif %}
+    </div>
+</div>
+<script>
+async function syncHeadhaul(){ showToast('正在刷新...',3000); try{ var r=await fetch('/api/headhaul/sync',{method:'POST'}); var d=await r.json(); showToast('更新:'+(d.synced||0)+'条'); setTimeout(function(){location.reload()},1500); }catch(e){ showToast('失败:'+e.message); } }
+async function lookupHeadhaul(){ var pn=document.getElementById('lookupPackno').value.trim(); if(!pn)return; showToast('查询中...',3000); try{ var r=await fetch('/api/headhaul/lookup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({packno:pn})}); var d=await r.json(); if(d.status==='ok'){ var dd=d.data; var html='<table><tr><td>运单号</td><td><strong>'+ (dd.packno||pn) +'</strong></td></tr>'+ '<tr><td>系统单号</td><td>'+ (dd.orderno||'') +'</td></tr>'+ '<tr><td>客户单号</td><td>'+ (dd.supcode||'') +'</td></tr>'+ '<tr><td>转单号</td><td><strong style=color:#e94560>'+ (dd.zycode||'') +'</strong></td></tr>'+ '<tr><td>渠道</td><td>'+ (dd.channelname||'') +'</td></tr>'+ '<tr><td>状态</td><td>'+ (dd.kdzt||'') +'</td></tr>'+ '<tr><td>目的地</td><td>'+ (dd.destnm||'') +'</td></tr>'+ '<tr><td>件数</td><td>'+ (dd.jcnt||'') +'</td></tr>'+ '<tr><td>实重</td><td>'+ (dd.yczweit||'') +'</td></tr></table>'; document.getElementById('lookupResult').innerHTML=html; document.getElementById('lookupResult').style.display='block'; }else{ showToast('未找到: '+(d.message||'')); } }catch(e){ showToast('查询失败:'+e.message); } }
+</script>
+{% endblock %}

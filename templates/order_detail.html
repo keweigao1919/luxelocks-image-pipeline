@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}订单 {{ order.order_number }}{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:16px">
+    <a href="/orders" style="color:#3498db;text-decoration:none" title="返回订单列表页">← 返回列表</a>
+    <button class="btn btn-primary" style="float:right" onclick="showTrackingForm()" title="手动录入物流运单号和物流商 | 数据保存到本地数据库，不会回传Shopify">📦 录入运单号</button>
+</div>
+
+<div id="trackingForm" style="display:none; background:#f8f9fa; padding:16px; border-radius:8px; margin-bottom:16px">
+    <h4>录入物流信息</h4>
+    <div style="display:flex; gap:8px; margin-top:8px">
+        <input id="trackingNum" placeholder="运单号" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:4px">
+        <input id="trackingCompany" placeholder="物流商" value="云途物流" style="width:150px; padding:8px; border:1px solid #ddd; border-radius:4px">
+        <button class="btn btn-green" onclick="addTracking()" title="保存运单号和物流商到该订单 | 仅供LuxeLocks Hub内部记录，不触发Shopify履约">确认录入</button>
+    </div>
+</div>
+
+<script>
+function showTrackingForm() {
+    document.getElementById('trackingForm').style.display = 'block';
+}
+async function addTracking() {
+    const tn = document.getElementById('trackingNum').value.trim();
+    const tc = document.getElementById('trackingCompany').value.trim() || '云途物流';
+    if (!tn) { alert('请输入运单号'); return; }
+    try {
+        const resp = await fetch('/api/tracking/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                order_id: '{{ order.platform_order_id }}',
+                tracking_number: tn,
+                tracking_company: tc
+            })
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            alert('运单号已录入！');
+            location.reload();
+        } else {
+            alert('失败: ' + data.message);
+        }
+    } catch(e) {
+        alert('出错: ' + e.message);
+    }
+}
+</script>
+
+<div class="card">
+    <div class="card-header">
+        订单详情 - {{ order.order_number or order.platform_order_id[:8] }}
+    </div>
+    <div class="card-body">
+        <table>
+            <tr><td style="width:120px;color:#888">订单号</td><td><strong>{{ order.order_number }}</strong></td></tr>
+            <tr><td style="color:#888">平台</td><td>{{ order.platform }}</td></tr>
+            <tr><td style="color:#888">平台ID</td><td>{{ order.platform_order_id }}</td></tr>
+            <tr><td style="color:#888">客户</td><td>{{ order.customer_name or '-' }}</td></tr>
+            <tr><td style="color:#888">邮箱</td><td>{{ order.customer_email or '-' }}</td></tr>
+            <tr><td style="color:#888">金额</td><td><strong>{{ order.currency or 'USD' }} {{ order.total_price }}</strong></td></tr>
+            <tr><td style="color:#888">状态</td><td>
+                {% if order.status == 'shipped' %}
+                <span class="badge badge-shipped">已发货</span>
+                {% elif order.status in ('paid','authorized') %}
+                <span class="badge badge-paid">已付款</span>
+                {% elif order.status in ('pending') %}
+                <span class="badge badge-pending">待处理</span>
+                {% elif order.status == 'cancelled' %}
+                <span class="badge badge-cancelled">已取消</span>
+                {% else %}
+                <span class="badge badge-pending">{{ order.status }}</span>
+                {% endif %}
+            </td></tr>
+            <tr><td style="color:#888">运单号</td><td>{{ order.tracking_number or '未发货' }}</td></tr>
+            <tr><td style="color:#888">物流商</td><td>{{ order.tracking_company or '-' }}</td></tr>
+            <tr><td style="color:#888">时间</td><td style="color:#999;font-size:12px">{{ order.created_at }}</td></tr>
+        </table>
+    </div>
+</div>
+
+{% if line_items %}
+<div class="card">
+    <div class="card-header">商品明细</div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr><th>SKU</th><th>品名</th><th>数量</th><th>单价</th></tr>
+            </thead>
+            <tbody>
+                {% for item in line_items %}
+                <tr>
+                    <td><strong>{{ item.sku or '-' }}</strong></td>
+                    <td>{{ item.title }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>${{ item.price }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if procurement_items %}
+<div class="card">
+    <div class="card-header" title="数据来源：采购资源信息池 + 供应商管理 | 按订单SKU简化后匹配采购资源池，自动关联供应商联系信息">🛒 采购明细 (来自采购资源信息池)</div>
+    <div class="card-body" style="padding:0;overflow-x:auto">
+        <table>
+            <thead>
+                <tr>
+                    <th>简化SKU</th>
+                    <th>供应商</th>
+                    <th>Seller ID</th>
+                    <th>采购成本</th>
+                    <th>采购链接</th>
+                    <th>联系人</th>
+                    <th>微信</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in procurement_items %}
+                <tr>
+                    <td><strong style="color:#e94560">{{ p.simple_sku }}</strong></td>
+                    <td>{{ p.supplier or '-' }}</td>
+                    <td>{{ p.seller_id or '-' }}</td>
+                    <td style="font-weight:600;color:#e94560">{% if p.cost %}¥{{ '%.2f'|format(p.cost) }}{% else %}-{% endif %}</td>
+                    <td>
+                        {% if p.purchase_link %}
+                        <a href="{{ p.purchase_link }}" target="_blank" style="font-size:12px;color:#3498db">🔗 打开</a>
+                        {% else %}-{% endif %}
+                    </td>
+                    <td>{{ p.contact_name or '-' }}</td>
+                    <td>{{ p.wechat or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if shipping %}
+<div class="card">
+    <div class="card-header">收货地址</div>
+    <div class="card-body">
+        <p>{{ shipping.get('name','') }}</p>
+        <p>{{ shipping.get('address1','') }} {{ shipping.get('address2','') }}</p>
+        <p>{{ shipping.get('city','') }}, {{ shipping.get('province','') }} {{ shipping.get('zip','') }}</p>
+        <p>{{ shipping.get('country','') }}</p>
+        {% if shipping.get('phone') %}<p>📞 {{ shipping.phone }}</p>{% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
