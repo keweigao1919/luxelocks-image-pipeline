@@ -837,8 +837,8 @@ def first_sentence(text, limit=140):
 def tiktok_perf_from_export_row(row, mapping, source_file):
     product_name, product_id = split_tiktok_product(row.get("商品"))
     mapped = mapping.get(product_id, {}) if product_id else {}
-    sku = mapped.get("sku") or (f"TT-{product_id}" if product_id else "")
-    simple = mapped.get("simple_sku") or simplify_sku(sku)
+    simple = mapped.get("simple_sku") or ""
+    sku = simple  # 以 simple_sku 为准，不再拼 TT- 占位符
     video_id = str(row.get("视频ID") or "").strip()
     import_key = f"{video_id}|{product_id or product_name[:80]}"
     views = parse_tiktok_int(row.get("VV"))
@@ -3192,7 +3192,7 @@ async def tiktok_videos_import(file: UploadFile = File(...)):
                 continue
             upsert_tiktok_video_performance(conn, item)
             imported += 1
-            if item["sku"].startswith("TT-"):
+            if not item["sku"]:
                 unmapped += 1
             sync_perf_to_tiktok_videos(conn, item)
             synced += 1
