@@ -270,6 +270,60 @@ def init_db():
     except: pass
     try: conn.execute("ALTER TABLE procurement_resources ADD COLUMN seller_id TEXT DEFAULT ''")
     except: pass
+    # TikTok Wig Ops 中控模块
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS tiktok_skus (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sku TEXT NOT NULL UNIQUE,
+            product_name TEXT,
+            color TEXT,
+            length TEXT,
+            price REAL DEFAULT 23.99,
+            product_cost REAL DEFAULT 0,
+            shipping_fee REAL DEFAULT 0,
+            platform_fee_rate REAL DEFAULT 0.06,
+            ad_cost REAL DEFAULT 0,
+            return_rate REAL DEFAULT 0.20,
+            refund_loss REAL DEFAULT 0,
+            stock INTEGER DEFAULT 0,
+            daily_sales REAL DEFAULT 0,
+            lead_time_days INTEGER DEFAULT 30,
+            safety_stock INTEGER DEFAULT 10,
+            status TEXT DEFAULT 'testing',
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS tiktok_videos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_name TEXT,
+            sku TEXT,
+            publish_date TEXT,
+            video_angle TEXT,
+            hook TEXT,
+            selling_points TEXT,
+            display_order TEXT,
+            voiceover TEXT,
+            cover_text TEXT,
+            caption TEXT,
+            hashtags TEXT,
+            posted INTEGER DEFAULT 0,
+            views INTEGER DEFAULT 0,
+            product_clicks INTEGER DEFAULT 0,
+            orders INTEGER DEFAULT 0,
+            gmv REAL DEFAULT 0,
+            comments TEXT,
+            diagnosis TEXT,
+            repeat_action TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tiktok_skus_sku ON tiktok_skus(sku);
+        CREATE INDEX IF NOT EXISTS idx_tiktok_videos_sku ON tiktok_videos(sku);
+        CREATE INDEX IF NOT EXISTS idx_tiktok_videos_date ON tiktok_videos(publish_date);
+    """)
     # ── 迁移: 为 orders 添加 shipping_type 字段 ──
     try:
         conn.execute("ALTER TABLE orders ADD COLUMN shipping_type TEXT DEFAULT '国内直发'")
@@ -321,6 +375,207 @@ def get_db():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA busy_timeout=30000")
     return conn
+
+
+def safe_float(value, default=0.0):
+    try:
+        if value in (None, ""):
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def safe_int(value, default=0):
+    try:
+        if value in (None, ""):
+            return default
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+TIKTOK_DEFAULT_ACCOUNTS = ["official", "channel01", "channel02", "channel03", "channel04"]
+TIKTOK_ANGLE_POOL = [
+    "整体效果", "发顶自然", "颜色自然光", "侧面层次", "背面发量",
+    "可调节内网", "新手友好", "23.99包邮"
+]
+
+
+def calc_tiktok_profit(row):
+    price = safe_float(row.get("price"), 23.99)
+    product_cost = safe_float(row.get("product_cost"))
+    shipping_fee = safe_float(row.get("shipping_fee"))
+    platform_fee_rate = safe_float(row.get("platform_fee_rate"), 0.06)
+    ad_cost = safe_float(row.get("ad_cost"))
+    return_rate = safe_float(row.get("return_rate"), 0.20)
+    refund_loss = safe_float(row.get("refund_loss")) or (product_cost + shipping_fee)
+    platform_fee = price * platform_fee_rate
+    base_profit = price - product_cost - shipping_fee - platform_fee - ad_cost
+    net_profit = base_profit - refund_loss * return_rate
+    profit_rate = net_profit / price if price else 0
+    denominator = max(1 - platform_fee_rate, 0.01)
+    break_even_price = (product_cost + shipping_fee + ad_cost + refund_loss * return_rate) / denominator
+    suggested_price = max(23.99, break_even_price + 6)
+    stock = safe_int(row.get("stock"))
+    daily_sales = safe_float(row.get("daily_sales"))
+    lead_time_days = safe_int(row.get("lead_time_days"), 30)
+    safety_stock = safe_int(row.get("safety_stock"), 10)
+    days_left = None
+    reorder_in_days = None
+    stock_status = "观察"
+    if daily_sales > 0:
+        days_left = stock / daily_sales
+        reorder_in_days = days_left - lead_time_days
+        if days_left <= lead_time_days or stock <= safety_stock:
+            stock_status = "需补货"
+        elif days_left <= lead_time_days + 7:
+            stock_status = "预警"
+        else:
+            stock_status = "安全"
+    elif stock <= safety_stock:
+        stock_status = "低库存"
+
+    if net_profit < 3:
+        profit_label = "高风险"
+    elif net_profit >= 6:
+        profit_label = "可主推"
+    else:
+        profit_label = "可测试"
+
+    return {
+        "platform_fee": round(platform_fee, 2),
+        "base_profit": round(base_profit, 2),
+        "net_profit": round(net_profit, 2),
+        "profit_rate": round(profit_rate * 100, 1),
+        "break_even_price": round(break_even_price, 2),
+        "suggested_price": round(suggested_price, 2),
+        "profit_label": profit_label,
+        "days_left": round(days_left, 1) if days_left is not None else None,
+        "reorder_in_days": round(reorder_in_days, 1) if reorder_in_days is not None else None,
+        "stock_status": stock_status
+    }
+
+
+def diagnose_tiktok_video(row):
+    views = safe_int(row.get("views"))
+    clicks = safe_int(row.get("product_clicks"))
+    orders = safe_int(row.get("orders"))
+    gmv = safe_float(row.get("gmv"))
+    ctr = clicks / views if views else 0
+    conversion = orders / clicks if clicks else 0
+    comments = (row.get("comments") or "").lower()
+
+    diagnosis = "数据不足"
+    repeat_action = "继续记录"
+    if views >= 1000 and ctr < 0.01:
+        diagnosis = "播放高点击低"
+        repeat_action = "重做封面和前3秒卖点"
+    elif clicks >= 20 and conversion < 0.03:
+        diagnosis = "点击高成交低"
+        repeat_action = "检查价格、详情页、评价和评论信任"
+    elif views < 500 and orders > 0:
+        diagnosis = "小流量高转化"
+        repeat_action = "换账号复拍同结构"
+    elif views >= 1000 and orders > 0:
+        diagnosis = "可复拍模板"
+        repeat_action = "保留开头和展示顺序连续复拍"
+    elif views >= 500 and clicks >= 10 and orders == 0:
+        diagnosis = "有兴趣未成交"
+        repeat_action = "增加上头效果、发顶近景和包邮价格"
+    if "color" in comments or "颜色" in comments:
+        repeat_action = "补拍自然光颜色对比"
+    if "wear" in comments or "beginner" in comments or "新手" in comments:
+        repeat_action = "补拍新手佩戴步骤"
+
+    return {
+        "ctr": round(ctr * 100, 2),
+        "conversion": round(conversion * 100, 2),
+        "aov": round(gmv / orders, 2) if orders else 0,
+        "diagnosis": diagnosis,
+        "repeat_action": repeat_action
+    }
+
+
+def build_tiktok_script(sku_info, angle):
+    sku = sku_info.get("sku") or "SKU"
+    color = sku_info.get("color") or "natural color"
+    length = sku_info.get("length") or ""
+    price = safe_float(sku_info.get("price"), 23.99)
+    product_name = sku_info.get("product_name") or f"{length} {color} wig".strip()
+    angle_map = {
+        "整体效果": ("full look", "full look -> face frame -> price", "This whole look is ready in seconds."),
+        "发顶自然": ("natural top", "top close-up -> hand parting -> full look", "Look how natural the top looks up close."),
+        "颜色自然光": ("color in natural light", "window light -> side move -> full look", "This color looks even better in natural light."),
+        "侧面层次": ("side layers", "side profile -> hair movement -> full look", "The side layers make it look soft and real."),
+        "背面发量": ("back view", "back view -> turn around -> full look", "The back has enough volume without looking heavy."),
+        "可调节内网": ("adjustable cap", "inside cap -> straps -> finished look", "The adjustable cap makes it beginner friendly."),
+        "新手友好": ("beginner friendly", "before -> put on -> final look", "No install skills needed for this everyday wig."),
+        "23.99包邮": ("$23.99 free shipping", "full look -> close-up -> price CTA", "A cute everyday wig for only $23.99 with free shipping.")
+    }
+    topic, display_order, hook = angle_map.get(angle, angle_map["整体效果"])
+    price_text = f"${price:.2f}".rstrip("0").rstrip(".")
+    return {
+        "hook": hook,
+        "selling_points": f"{topic}, {color}, beginner friendly, {price_text} free shipping",
+        "display_order": display_order,
+        "voiceover": (
+            f"If you want an easy everyday wig, this {product_name} is the one. "
+            f"Show the {topic}, check the natural movement, and it is only {price_text} with free shipping. "
+            "Tap the product link before it sells out."
+        ),
+        "short_voiceover": (
+            f"This {color} wig is beginner friendly, easy to wear, and only {price_text} shipped. "
+            "Tap to get yours."
+        ),
+        "cover_text": f"{color} wig {price_text} shipped",
+        "caption": f"{color} wig, beginner friendly, {price_text} free shipping. Tap the product link.",
+        "hashtags": "#wig #syntheticwig #beginnerwig #tiktokshop #affordablewig",
+        "live_pitch": f"This is {sku}, a {color} wig that is easy for beginners. It is {price_text} with free shipping today.",
+        "pinned_comment": f"SKU {sku}: {color}, beginner friendly, {price_text} free shipping."
+    }
+
+
+def generate_tiktok_schedule(sku_rows, accounts, start_date, days=7, max_per_sku_per_day=3):
+    if not sku_rows:
+        return []
+    parsed_start = datetime.strptime(start_date, "%Y-%m-%d")
+    accounts = [a.strip() for a in accounts if a and a.strip()] or TIKTOK_DEFAULT_ACCOUNTS
+    days = max(1, min(safe_int(days, 7), 30))
+    max_per_sku_per_day = max(1, safe_int(max_per_sku_per_day, 3))
+    last_by_account = {}
+    rows = []
+    sku_pool = [dict(r) for r in sku_rows]
+
+    for day_index in range(days):
+        day = (parsed_start + timedelta(days=day_index)).strftime("%Y-%m-%d")
+        daily_counts = {}
+        for account_index, account in enumerate(accounts):
+            chosen = None
+            for offset in range(len(sku_pool)):
+                candidate = sku_pool[(day_index * len(accounts) + account_index + offset) % len(sku_pool)]
+                sku = candidate["sku"]
+                if last_by_account.get(account) == sku and len(sku_pool) > 1:
+                    continue
+                if daily_counts.get(sku, 0) >= max_per_sku_per_day:
+                    continue
+                chosen = candidate
+                break
+            if not chosen:
+                chosen = sku_pool[(day_index + account_index) % len(sku_pool)]
+            sku = chosen["sku"]
+            daily_counts[sku] = daily_counts.get(sku, 0) + 1
+            last_by_account[account] = sku
+            angle = TIKTOK_ANGLE_POOL[(day_index + account_index) % len(TIKTOK_ANGLE_POOL)]
+            script = build_tiktok_script(chosen, angle)
+            rows.append({
+                "publish_date": day,
+                "account_name": account,
+                "sku": sku,
+                "video_angle": angle,
+                **script
+            })
+    return rows
 
 
 # ────────────────────────────────────────
@@ -2180,6 +2435,309 @@ async def procurement_product_list(search: str = ""):
                 "already_imported": already_imported
             })
         return {"status": "ok", "products": products}
+    finally:
+        conn.close()
+
+
+# ────────────────────────────────────────
+# TikTok Wig Ops 中控
+# ────────────────────────────────────────
+@app.get("/tiktok", response_class=HTMLResponse)
+async def tiktok_ops_page(request: Request):
+    """TikTok 假发运营中控页面"""
+    conn = get_db()
+    try:
+        sku_rows = conn.execute(
+            "SELECT * FROM tiktok_skus ORDER BY updated_at DESC, id DESC"
+        ).fetchall()
+        skus = []
+        high_risk = 0
+        main_push = 0
+        low_stock = 0
+        for row in sku_rows:
+            item = dict(row)
+            metrics = calc_tiktok_profit(item)
+            item.update(metrics)
+            if metrics["profit_label"] == "高风险":
+                high_risk += 1
+            if metrics["profit_label"] == "可主推":
+                main_push += 1
+            if metrics["stock_status"] in ("需补货", "低库存"):
+                low_stock += 1
+            skus.append(item)
+
+        video_rows = conn.execute(
+            "SELECT * FROM tiktok_videos ORDER BY publish_date DESC, id DESC LIMIT 200"
+        ).fetchall()
+        videos = []
+        repeat_candidates = 0
+        for row in video_rows:
+            item = dict(row)
+            metrics = diagnose_tiktok_video(item)
+            if not item.get("diagnosis"):
+                item["diagnosis"] = metrics["diagnosis"]
+            if not item.get("repeat_action"):
+                item["repeat_action"] = metrics["repeat_action"]
+            item.update({k: v for k, v in metrics.items() if k not in ("diagnosis", "repeat_action")})
+            if item["diagnosis"] in ("可复拍模板", "小流量高转化"):
+                repeat_candidates += 1
+            videos.append(item)
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        upcoming = conn.execute(
+            "SELECT COUNT(*) FROM tiktok_videos WHERE posted=0 AND publish_date >= ?",
+            (today,)
+        ).fetchone()[0]
+
+        stats = {
+            "total_skus": len(skus),
+            "main_push": main_push,
+            "high_risk": high_risk,
+            "low_stock": low_stock,
+            "upcoming": upcoming,
+            "repeat_candidates": repeat_candidates
+        }
+        return render_html(
+            "tiktok.html",
+            request,
+            skus=skus,
+            videos=videos,
+            stats=stats,
+            today=today,
+            default_accounts=", ".join(TIKTOK_DEFAULT_ACCOUNTS),
+            angle_pool=TIKTOK_ANGLE_POOL
+        )
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok/sku/save")
+async def tiktok_sku_save(request: Request):
+    data = await request.json()
+    sku = data.get("sku", "").strip()
+    if not sku:
+        return {"status": "error", "message": "SKU必填"}
+    conn = get_db()
+    try:
+        values = (
+            sku,
+            data.get("product_name", "").strip(),
+            data.get("color", "").strip(),
+            data.get("length", "").strip(),
+            safe_float(data.get("price"), 23.99),
+            safe_float(data.get("product_cost")),
+            safe_float(data.get("shipping_fee")),
+            safe_float(data.get("platform_fee_rate"), 0.06),
+            safe_float(data.get("ad_cost")),
+            safe_float(data.get("return_rate"), 0.20),
+            safe_float(data.get("refund_loss")),
+            safe_int(data.get("stock")),
+            safe_float(data.get("daily_sales")),
+            safe_int(data.get("lead_time_days"), 30),
+            safe_int(data.get("safety_stock"), 10),
+            data.get("status", "testing").strip() or "testing",
+            data.get("notes", "").strip()
+        )
+        if data.get("id"):
+            conn.execute("""
+                UPDATE tiktok_skus SET
+                    sku=?, product_name=?, color=?, length=?, price=?,
+                    product_cost=?, shipping_fee=?, platform_fee_rate=?, ad_cost=?,
+                    return_rate=?, refund_loss=?, stock=?, daily_sales=?,
+                    lead_time_days=?, safety_stock=?, status=?, notes=?,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            """, values + (safe_int(data.get("id")),))
+        else:
+            conn.execute("""
+                INSERT INTO tiktok_skus
+                    (sku, product_name, color, length, price,
+                     product_cost, shipping_fee, platform_fee_rate, ad_cost,
+                     return_rate, refund_loss, stock, daily_sales,
+                     lead_time_days, safety_stock, status, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(sku) DO UPDATE SET
+                    product_name=excluded.product_name,
+                    color=excluded.color,
+                    length=excluded.length,
+                    price=excluded.price,
+                    product_cost=excluded.product_cost,
+                    shipping_fee=excluded.shipping_fee,
+                    platform_fee_rate=excluded.platform_fee_rate,
+                    ad_cost=excluded.ad_cost,
+                    return_rate=excluded.return_rate,
+                    refund_loss=excluded.refund_loss,
+                    stock=excluded.stock,
+                    daily_sales=excluded.daily_sales,
+                    lead_time_days=excluded.lead_time_days,
+                    safety_stock=excluded.safety_stock,
+                    status=excluded.status,
+                    notes=excluded.notes,
+                    updated_at=CURRENT_TIMESTAMP
+            """, values)
+        conn.commit()
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok/sku/delete")
+async def tiktok_sku_delete(request: Request):
+    data = await request.json()
+    rid = safe_int(data.get("id"))
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM tiktok_skus WHERE id=?", (rid,))
+        conn.commit()
+        return {"status": "ok"}
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok/video/save")
+async def tiktok_video_save(request: Request):
+    data = await request.json()
+    sku = data.get("sku", "").strip()
+    if not sku:
+        return {"status": "error", "message": "SKU必填"}
+    base = {
+        "views": safe_int(data.get("views")),
+        "product_clicks": safe_int(data.get("product_clicks")),
+        "orders": safe_int(data.get("orders")),
+        "gmv": safe_float(data.get("gmv")),
+        "comments": data.get("comments", "").strip()
+    }
+    diag = diagnose_tiktok_video(base)
+    diagnosis = data.get("diagnosis", "").strip() or diag["diagnosis"]
+    repeat_action = data.get("repeat_action", "").strip() or diag["repeat_action"]
+    conn = get_db()
+    try:
+        values = (
+            data.get("account_name", "").strip(),
+            sku,
+            data.get("publish_date", "").strip() or datetime.now().strftime("%Y-%m-%d"),
+            data.get("video_angle", "").strip(),
+            data.get("hook", "").strip(),
+            data.get("selling_points", "").strip(),
+            data.get("display_order", "").strip(),
+            data.get("voiceover", "").strip(),
+            data.get("cover_text", "").strip(),
+            data.get("caption", "").strip(),
+            data.get("hashtags", "").strip(),
+            1 if data.get("posted") else 0,
+            base["views"],
+            base["product_clicks"],
+            base["orders"],
+            base["gmv"],
+            base["comments"],
+            diagnosis,
+            repeat_action
+        )
+        if data.get("id"):
+            conn.execute("""
+                UPDATE tiktok_videos SET
+                    account_name=?, sku=?, publish_date=?, video_angle=?, hook=?,
+                    selling_points=?, display_order=?, voiceover=?, cover_text=?,
+                    caption=?, hashtags=?, posted=?, views=?, product_clicks=?,
+                    orders=?, gmv=?, comments=?, diagnosis=?, repeat_action=?,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            """, values + (safe_int(data.get("id")),))
+        else:
+            conn.execute("""
+                INSERT INTO tiktok_videos
+                    (account_name, sku, publish_date, video_angle, hook,
+                     selling_points, display_order, voiceover, cover_text,
+                     caption, hashtags, posted, views, product_clicks,
+                     orders, gmv, comments, diagnosis, repeat_action)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, values)
+        conn.commit()
+        return {"status": "ok", "diagnosis": diagnosis, "repeat_action": repeat_action}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok/video/delete")
+async def tiktok_video_delete(request: Request):
+    data = await request.json()
+    rid = safe_int(data.get("id"))
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM tiktok_videos WHERE id=?", (rid,))
+        conn.commit()
+        return {"status": "ok"}
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok/script/generate")
+async def tiktok_script_generate(request: Request):
+    data = await request.json()
+    sku = data.get("sku", "").strip()
+    angle = data.get("video_angle", "整体效果").strip() or "整体效果"
+    conn = get_db()
+    try:
+        row = None
+        if sku:
+            row = conn.execute("SELECT * FROM tiktok_skus WHERE sku=?", (sku,)).fetchone()
+        info = dict(row) if row else {
+            "sku": sku,
+            "product_name": data.get("product_name", "").strip(),
+            "color": data.get("color", "").strip(),
+            "length": data.get("length", "").strip(),
+            "price": safe_float(data.get("price"), 23.99)
+        }
+        return {"status": "ok", "script": build_tiktok_script(info, angle)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/tiktok/schedule/generate")
+async def tiktok_schedule_generate(request: Request):
+    data = await request.json()
+    accounts_raw = data.get("accounts", "")
+    if isinstance(accounts_raw, str):
+        accounts = [a.strip() for a in accounts_raw.replace("\n", ",").split(",") if a.strip()]
+    else:
+        accounts = accounts_raw
+    start_date = data.get("start_date", "").strip() or datetime.now().strftime("%Y-%m-%d")
+    days = safe_int(data.get("days"), 7)
+    max_per_sku_per_day = safe_int(data.get("max_per_sku_per_day"), 3)
+    selected_skus = data.get("skus") or []
+
+    conn = get_db()
+    try:
+        params = []
+        query = "SELECT * FROM tiktok_skus WHERE status != 'paused'"
+        if selected_skus:
+            placeholders = ",".join("?" for _ in selected_skus)
+            query += f" AND sku IN ({placeholders})"
+            params.extend(selected_skus)
+        query += " ORDER BY status='main' DESC, updated_at DESC LIMIT 20"
+        sku_rows = conn.execute(query, params).fetchall()
+        rows = generate_tiktok_schedule(sku_rows, accounts, start_date, days, max_per_sku_per_day)
+        if data.get("save"):
+            for row in rows:
+                conn.execute("""
+                    INSERT INTO tiktok_videos
+                        (account_name, sku, publish_date, video_angle, hook,
+                         selling_points, display_order, voiceover, cover_text,
+                         caption, hashtags, posted)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """, (
+                    row["account_name"], row["sku"], row["publish_date"], row["video_angle"],
+                    row["hook"], row["selling_points"], row["display_order"], row["voiceover"],
+                    row["cover_text"], row["caption"], row["hashtags"]
+                ))
+            conn.commit()
+        return {"status": "ok", "rows": rows, "saved": len(rows) if data.get("save") else 0}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
     finally:
         conn.close()
 

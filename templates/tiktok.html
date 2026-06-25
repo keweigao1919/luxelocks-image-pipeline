@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+{% block title %}TikTok运营{% endblock %}
+{% block content %}
+<style>
+.tt-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.tt-header h2 { margin-bottom:4px; }
+.tt-sub { font-size:12px; color:#888; }
+.tt-grid { display:grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr); gap:16px; }
+.tt-grid-full { grid-column: 1 / -1; }
+.tt-card { background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); margin-bottom:16px; }
+.tt-card-header { padding:14px 18px; border-bottom:1px solid #eee; display:flex; align-items:center; justify-content:space-between; gap:8px; font-weight:600; }
+.tt-card-body { padding:16px 18px; }
+.tt-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.tt-table-wrap { overflow-x:auto; }
+.tt-table th { white-space:nowrap; }
+.tt-table td { vertical-align:middle; }
+.tt-muted { color:#888; font-size:12px; }
+.tt-pill { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap; }
+.tt-pill-main { background:#e8f5e9; color:#27ae60; }
+.tt-pill-risk { background:#fce4ec; color:#e53935; }
+.tt-pill-test { background:#e3f2fd; color:#2196f3; }
+.tt-pill-warn { background:#fff3e0; color:#e67e22; }
+.tt-pill-pause { background:#eee; color:#666; }
+.tt-form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px; }
+.tt-field label { display:block; font-size:12px; color:#666; font-weight:600; margin-bottom:4px; }
+.tt-field input, .tt-field select, .tt-field textarea { width:100%; padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
+.tt-field textarea { min-height:70px; resize:vertical; }
+.tt-field input:focus, .tt-field select:focus, .tt-field textarea:focus { outline:none; border-color:#3498db; }
+.tt-field-full { grid-column:1 / -1; }
+.tt-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); display:none; align-items:center; justify-content:center; z-index:9998; padding:20px; }
+.tt-modal { background:white; border-radius:8px; width:min(900px, 96vw); max-height:92vh; overflow-y:auto; padding:22px; }
+.tt-modal h3 { margin-bottom:14px; }
+.tt-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.tt-compact-btn { padding:3px 8px; border:1px solid #ddd; background:white; border-radius:4px; cursor:pointer; font-size:11px; margin-right:3px; }
+.tt-compact-btn:hover { background:#f5f6fa; }
+.tt-compact-btn.danger { color:#e53935; border-color:#fce4ec; }
+.tt-textarea-output { min-height:78px; font-size:12px; line-height:1.45; }
+.tt-schedule-box { max-height:360px; overflow:auto; border:1px solid #eee; border-radius:6px; }
+@media (max-width: 1100px) {
+    .tt-grid { grid-template-columns:1fr; }
+}
+</style>
+
+<div class="tt-header">
+    <div>
+        <h2>🎥 TikTok Wig Ops</h2>
+        <div class="tt-sub">SKU、排期、脚本、利润、复盘</div>
+    </div>
+    <div class="tt-actions">
+        <button class="btn btn-primary" onclick="showSkuModal()" title="新增TikTok主推或测试SKU，填写价格、成本、库存和退货参数">＋ SKU</button>
+        <button class="btn btn-green" onclick="showVideoModal()" title="新增一条视频计划或复盘数据，保存后自动诊断复拍动作">＋ 视频</button>
+    </div>
+</div>
+
+<div class="stats col4">
+    <div class="stat-card"><div class="label">SKU</div><div class="value">{{ stats.total_skus }}</div></div>
+    <div class="stat-card"><div class="label">可主推</div><div class="value" style="color:#27ae60">{{ stats.main_push }}</div></div>
+    <div class="stat-card"><div class="label">高风险</div><div class="value" style="color:#e53935">{{ stats.high_risk }}</div></div>
+    <div class="stat-card"><div class="label">待发布</div><div class="value" style="color:#3498db">{{ stats.upcoming }}</div></div>
+</div>
+
+<div class="tt-grid">
+    <div class="tt-card">
+        <div class="tt-card-header">
+            <span>SKU利润 / 补货</span>
+            <button class="btn btn-sm btn-primary" onclick="showSkuModal()" title="新增SKU到TikTok运营中控表">＋ 新增</button>
+        </div>
+        <div class="tt-card-body" style="padding:0">
+            {% if skus %}
+            <div class="tt-table-wrap">
+                <table class="tt-table">
+                    <thead>
+                    <tr>
+                        <th>选择</th><th>SKU</th><th>产品</th><th>售价</th><th>成本</th><th>净利</th><th>利润率</th><th>库存</th><th>售完</th><th>状态</th><th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for s in skus %}
+                    <tr>
+                        <td><input type="checkbox" class="schedule-sku" value="{{ s.sku }}" checked title="勾选后参与视频排期生成"></td>
+                        <td><strong style="color:#e94560">{{ s.sku }}</strong><div class="tt-muted">{{ s.color or '-' }} {{ s.length or '' }}</div></td>
+                        <td>{{ s.product_name or '-' }}</td>
+                        <td>${{ '%.2f'|format(s.price or 0) }}</td>
+                        <td>${{ '%.2f'|format((s.product_cost or 0) + (s.shipping_fee or 0)) }}</td>
+                        <td style="font-weight:700; color:{% if s.net_profit < 3 %}#e53935{% elif s.net_profit >= 6 %}#27ae60{% else %}#e67e22{% endif %}">${{ '%.2f'|format(s.net_profit) }}</td>
+                        <td>{{ s.profit_rate }}%</td>
+                        <td>{{ s.stock or 0 }}</td>
+                        <td>{% if s.days_left is not none %}{{ s.days_left }}天{% else %}-{% endif %}<div class="tt-muted">{{ s.stock_status }}</div></td>
+                        <td>
+                            {% if s.status == 'main' %}<span class="tt-pill tt-pill-main">主推</span>
+                            {% elif s.status == 'paused' %}<span class="tt-pill tt-pill-pause">暂停</span>
+                            {% elif s.profit_label == '高风险' %}<span class="tt-pill tt-pill-risk">高风险</span>
+                            {% else %}<span class="tt-pill tt-pill-test">{{ s.profit_label }}</span>{% endif %}
+                        </td>
+                        <td style="white-space:nowrap">
+                            <button class="tt-compact-btn" onclick="editSkuByIdx({{ loop.index0 }})" title="编辑该SKU的价格、成本、退货率、库存和状态">编辑</button>
+                            <button class="tt-compact-btn" onclick="quickScript('{{ s.sku }}')" title="用该SKU生成默认整体效果脚本">脚本</button>
+                            <button class="tt-compact-btn danger" onclick="deleteSkuByIdx({{ loop.index0 }})" title="删除该TikTok SKU记录">删</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty">暂无TikTok SKU</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="tt-card">
+        <div class="tt-card-header">脚本工厂</div>
+        <div class="tt-card-body">
+            <div class="tt-field" style="margin-bottom:10px">
+                <label>SKU</label>
+                <select id="scriptSku">
+                    {% for s in skus %}<option value="{{ s.sku }}">{{ s.sku }} - {{ s.color or s.product_name or '' }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="tt-field" style="margin-bottom:10px">
+                <label>卖点角度</label>
+                <select id="scriptAngle">
+                    {% for a in angle_pool %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="generateScript()" title="按SKU和卖点角度生成口播、展示顺序、封面、文案和标签">生成脚本</button>
+            <div class="tt-field" style="margin-top:12px">
+                <label>口播</label>
+                <textarea id="scriptVoiceover" class="tt-textarea-output" readonly></textarea>
+            </div>
+            <div class="tt-field" style="margin-top:10px">
+                <label>封面 / 发布文案</label>
+                <textarea id="scriptCaption" class="tt-textarea-output" readonly></textarea>
+            </div>
+            <button class="btn btn-sm" style="background:#eee;margin-top:8px" onclick="copyScript()" title="复制当前生成的口播和发布文案">复制</button>
+        </div>
+    </div>
+
+    <div class="tt-card tt-grid-full">
+        <div class="tt-card-header">
+            <span>7天视频排期</span>
+            <div class="tt-actions">
+                <button class="btn btn-sm btn-primary" onclick="generateSchedule(false)" title="按勾选SKU、账号和日期生成视频排期预览">生成预览</button>
+                <button class="btn btn-sm btn-green" onclick="generateSchedule(true)" title="生成排期并保存到视频复盘表，作为待发布视频">生成并保存</button>
+            </div>
+        </div>
+        <div class="tt-card-body">
+            <div class="tt-form-grid">
+                <div class="tt-field tt-field-full">
+                    <label>账号</label>
+                    <input id="scheduleAccounts" value="{{ default_accounts }}" title="用逗号分隔账号，例如 official, channel01, channel02">
+                </div>
+                <div class="tt-field">
+                    <label>开始日期</label>
+                    <input id="scheduleStart" type="date" value="{{ today }}" title="排期从该日期开始生成">
+                </div>
+                <div class="tt-field">
+                    <label>天数</label>
+                    <input id="scheduleDays" type="number" value="7" min="1" max="30" title="生成多少天的视频排期">
+                </div>
+                <div class="tt-field">
+                    <label>单SKU每日最多账号数</label>
+                    <input id="scheduleMaxPerSku" type="number" value="3" min="1" max="10" title="限制同一个SKU同一天最多出现几次">
+                </div>
+            </div>
+            <div id="scheduleResult" class="tt-schedule-box" style="margin-top:12px;display:none"></div>
+        </div>
+    </div>
+
+    <div class="tt-card tt-grid-full">
+        <div class="tt-card-header">
+            <span>视频复盘</span>
+            <button class="btn btn-sm btn-green" onclick="showVideoModal()" title="新增视频计划或填入播放、点击、成交数据">＋ 新增视频</button>
+        </div>
+        <div class="tt-card-body" style="padding:0">
+            {% if videos %}
+            <div class="tt-table-wrap">
+                <table class="tt-table">
+                    <thead>
+                    <tr>
+                        <th>日期</th><th>账号</th><th>SKU</th><th>角度</th><th>播放</th><th>点击</th><th>成交</th><th>CTR</th><th>诊断</th><th>复拍动作</th><th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for v in videos %}
+                    <tr>
+                        <td>{{ v.publish_date or '-' }}{% if not v.posted %}<div class="tt-muted">待发布</div>{% endif %}</td>
+                        <td>{{ v.account_name or '-' }}</td>
+                        <td><strong>{{ v.sku }}</strong></td>
+                        <td>{{ v.video_angle or '-' }}</td>
+                        <td>{{ v.views or 0 }}</td>
+                        <td>{{ v.product_clicks or 0 }}</td>
+                        <td>{{ v.orders or 0 }}</td>
+                        <td>{{ v.ctr }}%</td>
+                        <td>{{ v.diagnosis or '-' }}</td>
+                        <td>{{ v.repeat_action or '-' }}</td>
+                        <td style="white-space:nowrap">
+                            <button class="tt-compact-btn" onclick="editVideoByIdx({{ loop.index0 }})" title="编辑该视频计划或复盘数据">编辑</button>
+                            <button class="tt-compact-btn danger" onclick="deleteVideoByIdx({{ loop.index0 }})" title="删除该视频记录">删</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty">暂无视频记录</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="tt-modal-overlay" id="skuModal" onclick="if(event.target===this)closeSkuModal()">
+    <div class="tt-modal">
+        <h3 id="skuModalTitle">新增SKU</h3>
+        <input type="hidden" id="skuId">
+        <div class="tt-form-grid">
+            <div class="tt-field"><label>SKU</label><input id="skuCode" title="TikTok运营SKU或简化SKU"></div>
+            <div class="tt-field"><label>状态</label><select id="skuStatus" title="SKU当前运营状态"><option value="testing">测试</option><option value="main">主推</option><option value="restock">补货</option><option value="clear">清库存</option><option value="paused">暂停</option></select></div>
+            <div class="tt-field tt-field-full"><label>产品名</label><input id="skuName" title="TikTok展示用产品名"></div>
+            <div class="tt-field"><label>颜色</label><input id="skuColor" title="产品颜色，例如 brown highlight"></div>
+            <div class="tt-field"><label>长度</label><input id="skuLength" title="产品长度，例如 24 inch"></div>
+            <div class="tt-field"><label>售价($)</label><input id="skuPrice" type="number" step="0.01" value="23.99" title="TikTok Shop售价"></div>
+            <div class="tt-field"><label>产品成本($)</label><input id="skuCost" type="number" step="0.01" title="单件采购或入仓成本"></div>
+            <div class="tt-field"><label>尾程($)</label><input id="skuShipping" type="number" step="0.01" title="单件配送或尾程成本"></div>
+            <div class="tt-field"><label>平台费率</label><input id="skuFeeRate" type="number" step="0.01" value="0.06" title="平台费率，例如0.06"></div>
+            <div class="tt-field"><label>广告费($)</label><input id="skuAdCost" type="number" step="0.01" title="单件预估广告成本"></div>
+            <div class="tt-field"><label>退货率</label><input id="skuReturnRate" type="number" step="0.01" value="0.20" title="预估退货率，例如0.20"></div>
+            <div class="tt-field"><label>退款损失($)</label><input id="skuRefundLoss" type="number" step="0.01" title="每次退货造成的平均损失，留空则按成本+尾程估算"></div>
+            <div class="tt-field"><label>库存</label><input id="skuStock" type="number" title="当前可售库存"></div>
+            <div class="tt-field"><label>日均销量</label><input id="skuDailySales" type="number" step="0.1" title="最近稳定日均销量"></div>
+            <div class="tt-field"><label>补货LT(天)</label><input id="skuLeadTime" type="number" value="30" title="采购、运输、入仓总周期天数"></div>
+            <div class="tt-field"><label>安全库存</label><input id="skuSafetyStock" type="number" value="10" title="低于该库存时提示风险"></div>
+            <div class="tt-field tt-field-full"><label>备注</label><textarea id="skuNotes" title="记录款式判断、供应链或内容备注"></textarea></div>
+        </div>
+        <div class="tt-modal-actions">
+            <button class="btn" style="background:#eee" onclick="closeSkuModal()" title="关闭SKU编辑窗">取消</button>
+            <button class="btn btn-primary" onclick="saveSku()" title="保存SKU和利润补货参数">保存</button>
+        </div>
+    </div>
+</div>
+
+<div class="tt-modal-overlay" id="videoModal" onclick="if(event.target===this)closeVideoModal()">
+    <div class="tt-modal">
+        <h3 id="videoModalTitle">新增视频</h3>
+        <input type="hidden" id="videoId">
+        <div class="tt-form-grid">
+            <div class="tt-field"><label>账号</label><input id="videoAccount" title="发布账号名称"></div>
+            <div class="tt-field"><label>SKU</label><select id="videoSku" title="视频关联SKU">{% for s in skus %}<option value="{{ s.sku }}">{{ s.sku }}</option>{% endfor %}</select></div>
+            <div class="tt-field"><label>发布日期</label><input id="videoDate" type="date" value="{{ today }}" title="计划或实际发布日期"></div>
+            <div class="tt-field"><label>卖点角度</label><input id="videoAngle" title="视频主卖点，例如 发顶自然"></div>
+            <div class="tt-field"><label>已发布</label><select id="videoPosted" title="是否已发布到TikTok"><option value="0">待发布</option><option value="1">已发布</option></select></div>
+            <div class="tt-field"><label>播放</label><input id="videoViews" type="number" title="视频播放量"></div>
+            <div class="tt-field"><label>商品点击</label><input id="videoClicks" type="number" title="商品点击数"></div>
+            <div class="tt-field"><label>成交</label><input id="videoOrders" type="number" title="成交订单数"></div>
+            <div class="tt-field"><label>GMV($)</label><input id="videoGmv" type="number" step="0.01" title="视频带来的GMV"></div>
+            <div class="tt-field tt-field-full"><label>开头钩子</label><input id="videoHook" title="视频前3秒钩子"></div>
+            <div class="tt-field"><label>卖点</label><textarea id="videoSellingPoints" title="本条视频强调的卖点"></textarea></div>
+            <div class="tt-field"><label>展示顺序</label><textarea id="videoDisplayOrder" title="视频镜头展示顺序"></textarea></div>
+            <div class="tt-field tt-field-full"><label>口播</label><textarea id="videoVoiceover" title="视频口播文本"></textarea></div>
+            <div class="tt-field"><label>封面</label><textarea id="videoCover" title="封面文案"></textarea></div>
+            <div class="tt-field"><label>发布文案</label><textarea id="videoCaption" title="发布文案"></textarea></div>
+            <div class="tt-field"><label>标签</label><textarea id="videoHashtags" title="视频标签"></textarea></div>
+            <div class="tt-field"><label>评论反馈</label><textarea id="videoComments" title="评论关键词或顾客反馈"></textarea></div>
+            <div class="tt-field"><label>诊断</label><input id="videoDiagnosis" title="留空则系统按播放、点击、成交自动诊断"></div>
+            <div class="tt-field"><label>复拍动作</label><input id="videoRepeatAction" title="留空则系统按数据自动建议复拍动作"></div>
+        </div>
+        <div class="tt-modal-actions">
+            <button class="btn" style="background:#eee" onclick="closeVideoModal()" title="关闭视频编辑窗">取消</button>
+            <button class="btn btn-primary" onclick="saveVideo()" title="保存视频计划或复盘数据">保存</button>
+        </div>
+    </div>
+</div>
+
+<script>
+var skuData = [
+{% for s in skus %}
+    {"id":{{ s.id }},"sku":{{ s.sku|tojson }},"product_name":{{ s.product_name|tojson }},"color":{{ s.color|tojson }},"length":{{ s.length|tojson }},"price":{{ s.price|tojson }},"product_cost":{{ s.product_cost|tojson }},"shipping_fee":{{ s.shipping_fee|tojson }},"platform_fee_rate":{{ s.platform_fee_rate|tojson }},"ad_cost":{{ s.ad_cost|tojson }},"return_rate":{{ s.return_rate|tojson }},"refund_loss":{{ s.refund_loss|tojson }},"stock":{{ s.stock|tojson }},"daily_sales":{{ s.daily_sales|tojson }},"lead_time_days":{{ s.lead_time_days|tojson }},"safety_stock":{{ s.safety_stock|tojson }},"status":{{ s.status|tojson }},"notes":{{ s.notes|tojson }}}{% if not loop.last %},{% endif %}
+{% endfor %}
+];
+var videoData = [
+{% for v in videos %}
+    {"id":{{ v.id }},"account_name":{{ v.account_name|tojson }},"sku":{{ v.sku|tojson }},"publish_date":{{ v.publish_date|tojson }},"video_angle":{{ v.video_angle|tojson }},"hook":{{ v.hook|tojson }},"selling_points":{{ v.selling_points|tojson }},"display_order":{{ v.display_order|tojson }},"voiceover":{{ v.voiceover|tojson }},"cover_text":{{ v.cover_text|tojson }},"caption":{{ v.caption|tojson }},"hashtags":{{ v.hashtags|tojson }},"posted":{{ v.posted|tojson }},"views":{{ v.views|tojson }},"product_clicks":{{ v.product_clicks|tojson }},"orders":{{ v.orders|tojson }},"gmv":{{ v.gmv|tojson }},"comments":{{ v.comments|tojson }},"diagnosis":{{ v.diagnosis|tojson }},"repeat_action":{{ v.repeat_action|tojson }}}{% if not loop.last %},{% endif %}
+{% endfor %}
+];
+
+function val(id){ return document.getElementById(id).value; }
+function setVal(id, v){ document.getElementById(id).value = (v === null || v === undefined) ? '' : v; }
+
+function showSkuModal(){
+    document.getElementById('skuModalTitle').textContent = '新增SKU';
+    ['skuId','skuCode','skuName','skuColor','skuLength','skuCost','skuShipping','skuAdCost','skuRefundLoss','skuStock','skuDailySales','skuNotes'].forEach(function(id){ setVal(id,''); });
+    setVal('skuPrice','23.99'); setVal('skuFeeRate','0.06'); setVal('skuReturnRate','0.20'); setVal('skuLeadTime','30'); setVal('skuSafetyStock','10'); setVal('skuStatus','testing');
+    document.getElementById('skuModal').style.display = 'flex';
+}
+function editSkuByIdx(idx){
+    var s = skuData[idx]; if(!s) return;
+    document.getElementById('skuModalTitle').textContent = '编辑SKU: ' + s.sku;
+    setVal('skuId', s.id); setVal('skuCode', s.sku); setVal('skuName', s.product_name); setVal('skuColor', s.color); setVal('skuLength', s.length);
+    setVal('skuPrice', s.price); setVal('skuCost', s.product_cost); setVal('skuShipping', s.shipping_fee); setVal('skuFeeRate', s.platform_fee_rate);
+    setVal('skuAdCost', s.ad_cost); setVal('skuReturnRate', s.return_rate); setVal('skuRefundLoss', s.refund_loss); setVal('skuStock', s.stock);
+    setVal('skuDailySales', s.daily_sales); setVal('skuLeadTime', s.lead_time_days); setVal('skuSafetyStock', s.safety_stock); setVal('skuStatus', s.status || 'testing'); setVal('skuNotes', s.notes);
+    document.getElementById('skuModal').style.display = 'flex';
+}
+function closeSkuModal(){ document.getElementById('skuModal').style.display = 'none'; }
+async function saveSku(){
+    var data = {
+        id: val('skuId'), sku: val('skuCode').trim(), product_name: val('skuName').trim(), color: val('skuColor').trim(), length: val('skuLength').trim(),
+        price: val('skuPrice'), product_cost: val('skuCost'), shipping_fee: val('skuShipping'), platform_fee_rate: val('skuFeeRate'), ad_cost: val('skuAdCost'),
+        return_rate: val('skuReturnRate'), refund_loss: val('skuRefundLoss'), stock: val('skuStock'), daily_sales: val('skuDailySales'), lead_time_days: val('skuLeadTime'),
+        safety_stock: val('skuSafetyStock'), status: val('skuStatus'), notes: val('skuNotes').trim()
+    };
+    if(!data.sku){ showToast('SKU必填'); return; }
+    var r = await fetch('/api/tiktok/sku/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    var d = await r.json();
+    if(d.status === 'ok'){ closeSkuModal(); location.reload(); } else { showToast('保存失败: '+d.message); }
+}
+async function deleteSkuByIdx(idx){
+    var s = skuData[idx]; if(!s) return;
+    if(!confirm('删除TikTok SKU "'+s.sku+'"?')) return;
+    var r = await fetch('/api/tiktok/sku/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:s.id})});
+    var d = await r.json();
+    if(d.status === 'ok'){ location.reload(); } else { showToast('删除失败'); }
+}
+
+function quickScript(sku){ setVal('scriptSku', sku); setVal('scriptAngle', '整体效果'); generateScript(); }
+async function generateScript(){
+    var sku = val('scriptSku');
+    if(!sku){ showToast('先新增SKU'); return; }
+    var r = await fetch('/api/tiktok/script/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sku:sku, video_angle:val('scriptAngle')})});
+    var d = await r.json();
+    if(d.status !== 'ok'){ showToast('生成失败'); return; }
+    var s = d.script;
+    setVal('scriptVoiceover', s.voiceover + '\n\n8秒版: ' + s.short_voiceover);
+    setVal('scriptCaption', '封面: ' + s.cover_text + '\n发布文案: ' + s.caption + '\n标签: ' + s.hashtags + '\n置顶评论: ' + s.pinned_comment);
+}
+function copyScript(){
+    var text = val('scriptVoiceover') + '\n\n' + val('scriptCaption');
+    navigator.clipboard.writeText(text).then(function(){ showToast('已复制'); });
+}
+
+function selectedScheduleSkus(){
+    var boxes = document.querySelectorAll('.schedule-sku:checked');
+    var out = [];
+    boxes.forEach(function(b){ out.push(b.value); });
+    return out;
+}
+async function generateSchedule(save){
+    if(skuData.length === 0){ showToast('先新增SKU'); return; }
+    var skus = selectedScheduleSkus();
+    if(skus.length === 0){ showToast('请至少勾选一个SKU'); return; }
+    var data = {
+        accounts: val('scheduleAccounts'),
+        start_date: val('scheduleStart'),
+        days: val('scheduleDays'),
+        max_per_sku_per_day: val('scheduleMaxPerSku'),
+        skus: skus,
+        save: !!save
+    };
+    showToast(save ? '生成并保存排期...' : '生成排期预览...');
+    var r = await fetch('/api/tiktok/schedule/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    var d = await r.json();
+    if(d.status !== 'ok'){ showToast('生成失败: '+d.message); return; }
+    renderSchedule(d.rows || []);
+    if(save){ showToast('已保存 '+d.saved+' 条视频计划'); setTimeout(function(){ location.reload(); }, 800); }
+}
+function esc(s){
+    return String(s || '').replace(/[&<>"']/g, function(ch){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+}
+function renderSchedule(rows){
+    var box = document.getElementById('scheduleResult');
+    box.style.display = 'block';
+    if(rows.length === 0){ box.innerHTML = '<div class="empty">没有可生成的排期</div>'; return; }
+    var html = '<table class="tt-table"><thead><tr><th>日期</th><th>账号</th><th>SKU</th><th>角度</th><th>展示顺序</th><th>封面</th><th>文案</th></tr></thead><tbody>';
+    for(var i=0; i<rows.length; i++){
+        var x = rows[i];
+        html += '<tr><td>'+esc(x.publish_date)+'</td><td>'+esc(x.account_name)+'</td><td><strong>'+esc(x.sku)+'</strong></td><td>'+esc(x.video_angle)+'</td><td>'+esc(x.display_order)+'</td><td>'+esc(x.cover_text)+'</td><td>'+esc(x.caption)+'</td></tr>';
+    }
+    html += '</tbody></table>';
+    box.innerHTML = html;
+}
+
+function showVideoModal(){
+    document.getElementById('videoModalTitle').textContent = '新增视频';
+    ['videoId','videoAccount','videoAngle','videoViews','videoClicks','videoOrders','videoGmv','videoHook','videoSellingPoints','videoDisplayOrder','videoVoiceover','videoCover','videoCaption','videoHashtags','videoComments','videoDiagnosis','videoRepeatAction'].forEach(function(id){ setVal(id,''); });
+    setVal('videoDate', '{{ today }}'); setVal('videoPosted', '0');
+    document.getElementById('videoModal').style.display = 'flex';
+}
+function editVideoByIdx(idx){
+    var v = videoData[idx]; if(!v) return;
+    document.getElementById('videoModalTitle').textContent = '编辑视频: ' + v.sku;
+    setVal('videoId', v.id); setVal('videoAccount', v.account_name); setVal('videoSku', v.sku); setVal('videoDate', v.publish_date);
+    setVal('videoAngle', v.video_angle); setVal('videoPosted', v.posted ? '1' : '0'); setVal('videoViews', v.views); setVal('videoClicks', v.product_clicks);
+    setVal('videoOrders', v.orders); setVal('videoGmv', v.gmv); setVal('videoHook', v.hook); setVal('videoSellingPoints', v.selling_points);
+    setVal('videoDisplayOrder', v.display_order); setVal('videoVoiceover', v.voiceover); setVal('videoCover', v.cover_text); setVal('videoCaption', v.caption);
+    setVal('videoHashtags', v.hashtags); setVal('videoComments', v.comments); setVal('videoDiagnosis', v.diagnosis); setVal('videoRepeatAction', v.repeat_action);
+    document.getElementById('videoModal').style.display = 'flex';
+}
+function closeVideoModal(){ document.getElementById('videoModal').style.display = 'none'; }
+async function saveVideo(){
+    var data = {
+        id: val('videoId'), account_name: val('videoAccount').trim(), sku: val('videoSku'), publish_date: val('videoDate'), video_angle: val('videoAngle').trim(),
+        posted: val('videoPosted') === '1', views: val('videoViews'), product_clicks: val('videoClicks'), orders: val('videoOrders'), gmv: val('videoGmv'),
+        hook: val('videoHook').trim(), selling_points: val('videoSellingPoints').trim(), display_order: val('videoDisplayOrder').trim(), voiceover: val('videoVoiceover').trim(),
+        cover_text: val('videoCover').trim(), caption: val('videoCaption').trim(), hashtags: val('videoHashtags').trim(), comments: val('videoComments').trim(),
+        diagnosis: val('videoDiagnosis').trim(), repeat_action: val('videoRepeatAction').trim()
+    };
+    if(!data.sku){ showToast('SKU必填'); return; }
+    var r = await fetch('/api/tiktok/video/save', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    var d = await r.json();
+    if(d.status === 'ok'){ closeVideoModal(); location.reload(); } else { showToast('保存失败: '+d.message); }
+}
+async function deleteVideoByIdx(idx){
+    var v = videoData[idx]; if(!v) return;
+    if(!confirm('删除这条视频记录？')) return;
+    var r = await fetch('/api/tiktok/video/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:v.id})});
+    var d = await r.json();
+    if(d.status === 'ok'){ location.reload(); } else { showToast('删除失败'); }
+}
+document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape'){ closeSkuModal(); closeVideoModal(); }
+});
+</script>
+{% endblock %}

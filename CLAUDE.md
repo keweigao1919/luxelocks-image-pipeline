@@ -67,6 +67,22 @@ id PK, title, content, remind_date(YYYY-MM-DD), email, sent(0/1),
 repeat_type(''/monthly/weekly), repeat_day
 ```
 
+### tiktok_skus
+```
+id PK, sku UNIQUE, product_name, color, length, price, product_cost, shipping_fee,
+platform_fee_rate, ad_cost, return_rate, refund_loss, stock, daily_sales,
+lead_time_days, safety_stock, status(testing/main/restock/clear/paused), notes,
+created_at, updated_at
+```
+
+### tiktok_videos
+```
+id PK, account_name, sku, publish_date, video_angle, hook, selling_points,
+display_order, voiceover, cover_text, caption, hashtags, posted(0/1),
+views, product_clicks, orders, gmv, comments, diagnosis, repeat_action,
+created_at, updated_at
+```
+
 ### 其他表
 sync_log(128条), headhaul_orders(0条), important_matters(3条), inventory_log(0条)
 
@@ -146,6 +162,7 @@ cross_inv{simplified_sku: total_avail} ← warehouse_inventory汇总
 | `/procurement` | 采购池 | procurement.html |
 | `/suppliers` | 供应商 | suppliers.html |
 | `/media` | 素材 | media.html |
+| `/tiktok` | TikTok运营 | tiktok.html |
 | `/reminders` | 提醒 | reminders.html |
 | `/headhaul` | 头程 | headhaul.html |
 | `/sku-mapping` | SKU映射 | sku_mapping.html |
@@ -192,6 +209,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 | 日期 | AI | 改动内容 |
 |------|-----|---------|
+| 2026-06-25 | Codex | 新增 TikTok Wig Ops 中控模块：app.py 添加 tiktok_skus/tiktok_videos 表、利润/补货计算、脚本生成、7天排期、视频复盘API；templates/base.html 增加入口；新增 templates/tiktok.html 页面 |
 | 2026-06-25 | Codex | 补齐三方入口文档：memory/MEMORY.md 与 .cursorrules 均要求先读 WORKING.md + CLAUDE.md，避免 Claude/Claude Code/Codex 漏看实时看板 |
 | 2026-06-25 | Claude Code | 三方协作基建: 创建 WORKING.md 活动看板, 更新 CLAUDE.md 协作规则支持 Claude+Codex+ClaudeCode 三方, 更新 AGENTS.md 指向 WORKING.md, git init 就绪 |
 | 2026-06-25 | Codex | 补齐协作基建：新增 memory/MEMORY.md 指向 CLAUDE.md，新增 .gitignore 避免提交 venv/日志/数据库，并准备初始化 git 提交流程 |
