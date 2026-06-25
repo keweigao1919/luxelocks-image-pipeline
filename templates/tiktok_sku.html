@@ -33,6 +33,17 @@
     </div>
 </div>
 
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+    <form method="get" action="/tiktok-sku" style="display:flex;align-items:center;gap:8px">
+        <input name="q" class="search-box" placeholder="搜索 SKU / 简化SKU / 商品ID..." value="{{ q or '' }}" title="模糊搜索：匹配 SKU、简化SKU 或 TikTok商品ID（19位字符串），支持片段匹配。">
+        <button class="btn btn-primary btn-sm">🔍 搜索</button>
+    </form>
+    {% if q %}
+    <a href="/tiktok-sku" class="btn btn-sm" style="background:#eee;text-decoration:none" title="清除搜索条件，显示全部映射。">清除</a>
+    <span style="font-size:12px;color:#888">搜索: "{{ q }}" — {{ mappings|length }} 条结果</span>
+    {% endif %}
+</div>
+
 <div class="card">
     <div class="card-header">
         <span title="表格说明：每一行代表一个 TikTok商品ID 和店铺SKU的对应关系。导入视频表现时按商品ID自动匹配。">映射列表</span>

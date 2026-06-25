@@ -235,6 +235,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 | 2026-06-25 | Codex | 调整 TikTok Wig Ops 的 SKU利润/补货表头：templates/tiktok.html 将卡片内“＋ 新增”按钮改为 SKU / 简化SKU / 商品ID 搜索框，支持实时过滤当前利润补货表内SKU并显示匹配数量 |
 | 2026-06-25 | Codex | 调整 TikTok Wig Ops 的 SKU利润/补货表排期选择：templates/tiktok.html 中 SKU 勾选框默认不再选中，必须手动勾选后才参与视频排期生成 |
 | 2026-06-25 | Codex | 优化 TikTok Wig Ops 与 TikTok SKUs表联动：app.py 新增合并SKU候选/简化SKU/商品ID查找逻辑，TikTok SKUs映射保存时自动同步 tiktok_skus；templates/tiktok.html 脚本工厂支持输入完整SKU、简化SKU或TikTok商品ID并显示来源，SKU利润/补货表显示来源标签 |
+| 2026-06-26 | Claude Code | TikTok SKUs表加搜索: app.py路由加q参数(参数化LIKE,匹配sku/simple_sku/tiktok_product_id三列全部TEXT); tiktok_sku.html加搜索框+清除链接+结果计数; 验证全ID/部分ID/SKU片段均命中 |
 | 2026-06-26 | Claude Code | 列重排: tiktok_videos.html将tiktok_product_id从商品列移除,新增独立商品ID列(SKU后),等宽字体显示19位数字; 未改DB和抽取逻辑 |
 | 2026-06-26 | Claude Code | 新增product_id字段: ALTER TABLE tiktok_video_performance加product_id TEXT; 回填524条(从现有tiktok_product_id复制,product_name无ID可抽); upsert_tiktok_video_performance和列表SELECT加入product_id; 全量19位数字0 NULL |
 | 2026-06-25 | Claude Code | 修复TikTok Videos页面卡顿: app.py加分页(page/LIMIT50)改SELECT精简16列(原40列)+排序白名单; tiktok_videos.html去location.reload改window.location.href+添加上一页/下一页导航; 诊断确认无iframe嵌入,524条分11页 |

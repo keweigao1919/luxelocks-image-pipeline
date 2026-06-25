@@ -2984,14 +2984,22 @@ async def procurement_product_list(search: str = ""):
 # TikTok SKU管理
 # ────────────────────────────────────────
 @app.get("/tiktok-sku", response_class=HTMLResponse)
-async def tiktok_sku_page(request: Request):
+async def tiktok_sku_page(request: Request, q: str = ""):
     """TikTok SKU映射管理"""
     conn = get_db()
     try:
+        q = q.strip()
+        where = "1=1"
+        params = []
+        if q:
+            like = f"%{q}%"
+            where = "(sku LIKE ? OR simple_sku LIKE ? OR tiktok_product_id LIKE ?)"
+            params = [like, like, like]
         rows = conn.execute(
-            "SELECT * FROM tiktok_sku_mapping ORDER BY COALESCE(simple_sku, sku), sku"
+            f"SELECT * FROM tiktok_sku_mapping WHERE {where} ORDER BY COALESCE(simple_sku, sku), sku",
+            params
         ).fetchall()
-        return render_html("tiktok_sku.html", request, mappings=[dict(r) for r in rows])
+        return render_html("tiktok_sku.html", request, mappings=[dict(r) for r in rows], q=q)
     finally:
         conn.close()
 
