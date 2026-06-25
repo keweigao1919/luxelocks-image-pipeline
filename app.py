@@ -862,6 +862,7 @@ def tiktok_perf_from_export_row(row, mapping, source_file):
         "publish_date": parse_tiktok_publish_date(row.get("发布时间")),
         "product_name": product_name,
         "tiktok_product_id": product_id,
+        "product_id": product_id,
         "sku": sku,
         "simple_sku": simple,
         "vv": views,
@@ -899,7 +900,7 @@ def tiktok_perf_from_export_row(row, mapping, source_file):
 def upsert_tiktok_video_performance(conn, item):
     columns = [
         "import_key", "creator_nickname", "creator_id", "video_info", "video_id",
-        "publish_time", "product_name", "tiktok_product_id", "sku", "simple_sku",
+        "publish_time", "product_name", "tiktok_product_id", "product_id", "sku", "simple_sku",
         "vv", "likes_count", "comments_count", "shares_count", "new_followers_count",
         "product_redirects", "product_impressions", "product_clicks", "unique_customers",
         "attributed_sku_orders", "video_sku_orders", "indirect_sku_orders",
@@ -3076,7 +3077,7 @@ async def tiktok_sku_mapping_delete(request: Request):
 # 列表需要的列（避免 SELECT * 加载40列）
 _VIDEO_LIST_COLS = [
     "id","creator_nickname","video_info","video_id","publish_time",
-    "product_name","tiktok_product_id","sku","simple_sku",
+    "product_name","tiktok_product_id","product_id","sku","simple_sku",
     "vv","product_clicks","attributed_sku_orders","attributed_gmv",
     "platform_diagnosis","local_diagnosis","repeat_action"
 ]
