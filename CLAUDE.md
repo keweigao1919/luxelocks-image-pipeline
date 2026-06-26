@@ -257,6 +257,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 | 日期 | AI | 改动内容 |
 |------|-----|---------|
+| 2026-06-26 | Codex | 拆分 TikTok Wig Ops 排期任务与视频复盘：app.py 新增 tiktok_video_tasks 待发布任务表、旧待发布纯计划迁移、排期保存改写任务表、任务已发布/跳过/删除接口，复盘查询过滤未发布纯计划；templates/tiktok.html 新增“待发布排期任务”卡片，生成并保存改为保存任务，发布后再“已发布→复盘” |
 | 2026-06-26 | Claude Code | 体检修复-加JOIN索引: idx_tiktok_sku_map_pid + idx_tvp_pid; init_db自动建 |
 | 2026-06-26 | Claude Code | 体检修复-Page B loadVideoReview加容错: .catch失败提示+恢复旧内容+reqId竞态保护 |
 | 2026-06-26 | Codex | 脚本工厂改为视频ID驱动复拍模板 |

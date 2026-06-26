@@ -371,9 +371,35 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS tiktok_video_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            account_name TEXT,
+            sku TEXT,
+            simple_sku TEXT,
+            tiktok_product_id TEXT,
+            product_name TEXT,
+            publish_date TEXT,
+            video_angle TEXT,
+            hook TEXT,
+            selling_points TEXT,
+            display_order TEXT,
+            voiceover TEXT,
+            cover_text TEXT,
+            caption TEXT,
+            hashtags TEXT,
+            status TEXT DEFAULT 'planned',
+            review_video_id INTEGER DEFAULT 0,
+            notes TEXT,
+            source TEXT DEFAULT 'schedule',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_tiktok_skus_sku ON tiktok_skus(sku);
         CREATE INDEX IF NOT EXISTS idx_tiktok_videos_sku ON tiktok_videos(sku);
         CREATE INDEX IF NOT EXISTS idx_tiktok_videos_date ON tiktok_videos(publish_date);
+        CREATE INDEX IF NOT EXISTS idx_tiktok_video_tasks_date ON tiktok_video_tasks(status, publish_date);
+        CREATE INDEX IF NOT EXISTS idx_tiktok_video_tasks_sku ON tiktok_video_tasks(sku);
 
         CREATE TABLE IF NOT EXISTS tiktok_video_performance (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -440,6 +466,46 @@ def init_db():
         except: pass
     try:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_tiktok_videos_tiktok_id ON tiktok_videos(tiktok_video_id, tiktok_product_id)")
+    except:
+        pass
+    try:
+        conn.execute("""
+            INSERT INTO tiktok_video_tasks
+                (account_name, sku, simple_sku, tiktok_product_id, product_name,
+                 publish_date, video_angle, hook, selling_points, display_order,
+                 voiceover, cover_text, caption, hashtags, status, source,
+                 created_at, updated_at)
+            SELECT
+                v.account_name, v.sku,
+                COALESCE(
+                    (SELECT m.simple_sku FROM tiktok_sku_mapping m
+                     WHERE CAST(v.tiktok_product_id AS TEXT) = CAST(m.tiktok_product_id AS TEXT)
+                     LIMIT 1),
+                    (SELECT m.simple_sku FROM tiktok_sku_mapping m
+                     WHERE v.sku = m.sku
+                     LIMIT 1),
+                    ''
+                ),
+                v.tiktok_product_id,
+                v.product_name, v.publish_date, v.video_angle, v.hook, v.selling_points,
+                v.display_order, v.voiceover, v.cover_text, v.caption, v.hashtags,
+                'planned', 'migrated_tiktok_videos', v.created_at, v.updated_at
+            FROM tiktok_videos v
+            WHERE COALESCE(v.posted, 0) = 0
+              AND COALESCE(v.views, 0) = 0
+              AND COALESCE(v.product_clicks, 0) = 0
+              AND COALESCE(v.orders, 0) = 0
+              AND COALESCE(v.gmv, 0) = 0
+              AND (v.tiktok_video_id IS NULL OR v.tiktok_video_id = '')
+              AND NOT EXISTS (
+                  SELECT 1 FROM tiktok_video_tasks t
+                  WHERE COALESCE(t.account_name, '') = COALESCE(v.account_name, '')
+                    AND COALESCE(t.sku, '') = COALESCE(v.sku, '')
+                    AND COALESCE(t.publish_date, '') = COALESCE(v.publish_date, '')
+                    AND COALESCE(t.video_angle, '') = COALESCE(v.video_angle, '')
+                    AND t.source = 'migrated_tiktok_videos'
+              )
+        """)
     except:
         pass
     # ── 迁移: 为 orders 添加 shipping_type 字段 ──
@@ -985,6 +1051,9 @@ def generate_tiktok_schedule(sku_rows, accounts, start_date, days=7, max_per_sku
                 "publish_date": day,
                 "account_name": account,
                 "sku": sku,
+                "simple_sku": chosen.get("simple_sku") or simplify_sku(sku),
+                "tiktok_product_id": chosen.get("tiktok_product_id") or script.get("target_tiktok_product_id") or "",
+                "product_name": chosen.get("product_name") or "",
                 "video_angle": angle,
                 **script
             })
@@ -3555,7 +3624,17 @@ async def tiktok_ops_page(request: Request, sort: str = "", order: str = "desc")
         video_order = order if order in ("asc", "desc") else "desc"
         video_sort_expr = video_sort_exprs[video_sort]
         video_rows = conn.execute(
-            f"SELECT * FROM tiktok_videos ORDER BY {video_sort_expr} {video_order}, id DESC LIMIT 200"
+            f"""
+            SELECT * FROM tiktok_videos
+            WHERE COALESCE(posted, 0) = 1
+               OR (tiktok_video_id IS NOT NULL AND tiktok_video_id != '')
+               OR COALESCE(views, 0) > 0
+               OR COALESCE(product_clicks, 0) > 0
+               OR COALESCE(orders, 0) > 0
+               OR COALESCE(gmv, 0) > 0
+            ORDER BY {video_sort_expr} {video_order}, id DESC
+            LIMIT 200
+            """
         ).fetchall()
         videos = []
         repeat_candidates = 0
@@ -3573,9 +3652,17 @@ async def tiktok_ops_page(request: Request, sort: str = "", order: str = "desc")
 
         today = datetime.now().strftime("%Y-%m-%d")
         upcoming = conn.execute(
-            "SELECT COUNT(*) FROM tiktok_videos WHERE posted=0 AND publish_date >= ?",
+            "SELECT COUNT(*) FROM tiktok_video_tasks WHERE status='planned' AND publish_date >= ?",
             (today,)
         ).fetchone()[0]
+        task_rows = conn.execute("""
+            SELECT *
+            FROM tiktok_video_tasks
+            WHERE status='planned'
+            ORDER BY publish_date ASC, account_name ASC, id ASC
+            LIMIT 120
+        """).fetchall()
+        tasks = [dict(r) for r in task_rows]
 
         stats = {
             "total_skus": len(skus),
@@ -3588,7 +3675,7 @@ async def tiktok_ops_page(request: Request, sort: str = "", order: str = "desc")
         is_partial = request.url.query.find("partial=1") >= 0
         tmpl = "_tiktok_videos_review.html" if is_partial else "tiktok.html"
         return render_html(tmpl, request,
-            skus=skus, videos=videos, stats=stats, today=today,
+            skus=skus, videos=videos, tasks=tasks, stats=stats, today=today,
             default_accounts=", ".join(TIKTOK_DEFAULT_ACCOUNTS),
             angle_pool=TIKTOK_ANGLE_POOL,
             video_sort=video_sort, video_order=video_order
@@ -3774,6 +3861,65 @@ async def tiktok_video_delete(request: Request):
         conn.close()
 
 
+@app.post("/api/tiktok/task/status")
+async def tiktok_task_status(request: Request):
+    data = await request.json()
+    rid = safe_int(data.get("id"))
+    action = str(data.get("action") or "").strip()
+    if not rid:
+        return {"status": "error", "message": "缺少任务ID"}
+    if action not in ("posted", "skip", "delete"):
+        return {"status": "error", "message": "未知任务动作"}
+
+    conn = get_db()
+    try:
+        if action == "delete":
+            conn.execute("DELETE FROM tiktok_video_tasks WHERE id=?", (rid,))
+            conn.commit()
+            return {"status": "ok", "message": "已删除排期任务"}
+
+        task = conn.execute("SELECT * FROM tiktok_video_tasks WHERE id=?", (rid,)).fetchone()
+        if not task:
+            return {"status": "error", "message": "未找到排期任务"}
+
+        if action == "skip":
+            conn.execute("""
+                UPDATE tiktok_video_tasks
+                SET status='skipped', updated_at=CURRENT_TIMESTAMP
+                WHERE id=?
+            """, (rid,))
+            conn.commit()
+            return {"status": "ok", "message": "已跳过排期任务"}
+
+        diag = diagnose_tiktok_video({"views": 0, "product_clicks": 0, "orders": 0, "gmv": 0, "comments": ""})
+        cur = conn.execute("""
+            INSERT INTO tiktok_videos
+                (account_name, sku, tiktok_product_id, product_name, publish_date,
+                 video_angle, hook, selling_points, display_order, voiceover,
+                 cover_text, caption, hashtags, posted, views, product_clicks,
+                 orders, gmv, diagnosis, repeat_action)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 0, 0, ?, ?)
+        """, (
+            task["account_name"], task["sku"], task["tiktok_product_id"], task["product_name"],
+            task["publish_date"], task["video_angle"], task["hook"], task["selling_points"],
+            task["display_order"], task["voiceover"], task["cover_text"], task["caption"],
+            task["hashtags"], diag["diagnosis"], diag["repeat_action"]
+        ))
+        review_id = cur.lastrowid
+        conn.execute("""
+            UPDATE tiktok_video_tasks
+            SET status='posted', review_video_id=?, updated_at=CURRENT_TIMESTAMP
+            WHERE id=?
+        """, (review_id, rid))
+        conn.commit()
+        return {"status": "ok", "message": "已转入视频复盘", "review_video_id": review_id}
+    except Exception as e:
+        conn.rollback()
+        return {"status": "error", "message": str(e)}
+    finally:
+        conn.close()
+
+
 @app.post("/api/tiktok/script/generate")
 async def tiktok_script_generate(request: Request):
     data = await request.json()
@@ -3857,21 +4003,49 @@ async def tiktok_schedule_generate(request: Request):
             sku_rows = all_options
         sku_rows = sorted(sku_rows, key=lambda o: (o.get("status") != "main", str(o.get("sku") or "")))[:20]
         rows = generate_tiktok_schedule(sku_rows, accounts, start_date, days, max_per_sku_per_day)
+        saved = 0
         if data.get("save"):
             for row in rows:
-                conn.execute("""
-                    INSERT INTO tiktok_videos
-                        (account_name, sku, publish_date, video_angle, hook,
-                         selling_points, display_order, voiceover, cover_text,
-                         caption, hashtags, posted)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-                """, (
-                    row["account_name"], row["sku"], row["publish_date"], row["video_angle"],
-                    row["hook"], row["selling_points"], row["display_order"], row["voiceover"],
+                values = (
+                    row["account_name"], row["sku"], row.get("simple_sku", ""),
+                    row.get("tiktok_product_id", ""), row.get("product_name", ""),
+                    row["publish_date"], row["video_angle"], row["hook"],
+                    row["selling_points"], row["display_order"], row["voiceover"],
                     row["cover_text"], row["caption"], row["hashtags"]
-                ))
+                )
+                existing = conn.execute("""
+                    SELECT id FROM tiktok_video_tasks
+                    WHERE status='planned'
+                      AND COALESCE(account_name, '')=?
+                      AND COALESCE(sku, '')=?
+                      AND COALESCE(publish_date, '')=?
+                    LIMIT 1
+                """, (row["account_name"], row["sku"], row["publish_date"])).fetchone()
+                if existing:
+                    conn.execute("""
+                        UPDATE tiktok_video_tasks SET
+                            simple_sku=?, tiktok_product_id=?, product_name=?, video_angle=?,
+                            hook=?, selling_points=?, display_order=?, voiceover=?,
+                            cover_text=?, caption=?, hashtags=?, source='schedule',
+                            updated_at=CURRENT_TIMESTAMP
+                        WHERE id=?
+                    """, (
+                        row.get("simple_sku", ""), row.get("tiktok_product_id", ""),
+                        row.get("product_name", ""), row["video_angle"], row["hook"],
+                        row["selling_points"], row["display_order"], row["voiceover"],
+                        row["cover_text"], row["caption"], row["hashtags"], existing["id"]
+                    ))
+                else:
+                    conn.execute("""
+                        INSERT INTO tiktok_video_tasks
+                            (account_name, sku, simple_sku, tiktok_product_id, product_name,
+                             publish_date, video_angle, hook, selling_points, display_order,
+                             voiceover, cover_text, caption, hashtags, status, source)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', 'schedule')
+                    """, values)
+                saved += 1
             conn.commit()
-        return {"status": "ok", "rows": rows, "saved": len(rows) if data.get("save") else 0}
+        return {"status": "ok", "rows": rows, "saved": saved if data.get("save") else 0}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:
