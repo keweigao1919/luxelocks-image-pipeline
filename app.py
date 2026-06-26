@@ -612,42 +612,337 @@ def diagnose_tiktok_video(row):
     }
 
 
-def build_tiktok_script(sku_info, angle):
-    sku = sku_info.get("sku") or "SKU"
-    color = sku_info.get("color") or "natural color"
-    length = sku_info.get("length") or ""
-    price = safe_float(sku_info.get("price"), 23.99)
-    product_name = sku_info.get("product_name") or f"{length} {color} wig".strip()
-    angle_map = {
-        "整体效果": ("full look", "full look -> face frame -> price", "This whole look is ready in seconds."),
-        "发顶自然": ("natural top", "top close-up -> hand parting -> full look", "Look how natural the top looks up close."),
-        "颜色自然光": ("color in natural light", "window light -> side move -> full look", "This color looks even better in natural light."),
-        "侧面层次": ("side layers", "side profile -> hair movement -> full look", "The side layers make it look soft and real."),
-        "背面发量": ("back view", "back view -> turn around -> full look", "The back has enough volume without looking heavy."),
-        "可调节内网": ("adjustable cap", "inside cap -> straps -> finished look", "The adjustable cap makes it beginner friendly."),
-        "新手友好": ("beginner friendly", "before -> put on -> final look", "No install skills needed for this everyday wig."),
-        "23.99包邮": ("$23.99 free shipping", "full look -> close-up -> price CTA", "A cute everyday wig for only $23.99 with free shipping.")
-    }
-    topic, display_order, hook = angle_map.get(angle, angle_map["整体效果"])
+def concise_wig_name(name, fallback="everyday wig"):
+    text = re.sub(r"[|/]+", " ", str(name or "")).strip()
+    text = re.sub(r"\s+", " ", text)
+    if not text:
+        return fallback
+    remove_terms = [
+        "high-temperature", "high temperature", "synthetic material", "synthetic fiber",
+        "heat resistant", "heat-resistant", "fiber material", "for women", "day outfit",
+        "party look", "resistant hairstyle", "material", "fashion"
+    ]
+    lowered = text.lower()
+    for term in remove_terms:
+        lowered = lowered.replace(term, "")
+    words = [w for w in re.split(r"\s+", lowered) if w]
+    title_words = []
+    for word in words:
+        if word in {"wig", "with", "and", "the", "for"} and title_words and title_words[-1] == word:
+            continue
+        title_words.append(word)
+        if len(title_words) >= 10:
+            break
+    result = " ".join(title_words).strip(" -–|")
+    return result or fallback
+
+
+def infer_wig_color(*texts):
+    haystack = " ".join(str(t or "") for t in texts).lower()
+    color_phrases = [
+        "ash blonde ombre", "ash blonde", "cream blonde", "blonde highlight",
+        "brown blonde", "ash brown", "dark roots", "ombre", "balayage",
+        "highlight", "blonde", "brown", "black", "burgundy", "red"
+    ]
+    found = [phrase for phrase in color_phrases if phrase in haystack]
+    if "ash blonde" in found and "ombre" in found:
+        return "ash blonde ombre"
+    if "dark roots" in found and "blonde" in found:
+        return "rooted blonde"
+    return found[0] if found else "natural color"
+
+
+def script_angle_profile(angle):
+    text = str(angle or "")
+    if "发顶" in text or "top" in text.lower():
+        return "natural top", "top close-up -> hand parting -> full look", "Look how natural the top looks up close."
+    if "颜色" in text or "color" in text.lower():
+        return "color in natural light", "window light -> side move -> full look", "This color looks even better in natural light."
+    if "侧面" in text or "layers" in text.lower():
+        return "side layers", "side profile -> hair movement -> full look", "The side layers make it look soft and real."
+    if "背面" in text or "back" in text.lower():
+        return "back view", "back view -> turn around -> full look", "The back has enough volume without looking heavy."
+    if "内网" in text or "cap" in text.lower():
+        return "adjustable cap", "inside cap -> straps -> finished look", "The adjustable cap makes it beginner friendly."
+    if "新手" in text or "beginner" in text.lower():
+        return "beginner friendly", "before -> put on -> final look", "No install skills needed for this everyday wig."
+    if "23.99" in text or "包邮" in text:
+        return "$23.99 free shipping", "full look -> close-up -> price CTA", "A cute everyday wig for only $23.99 with free shipping."
+    return "full look", "full look -> face frame -> price", "This whole look is ready in seconds."
+
+
+def script_price_parts(price):
+    price = safe_float(price)
+    if price <= 0:
+        return "", "check today's deal", "today's deal", "Tap the product link to check today's deal."
     price_text = f"${price:.2f}".rstrip("0").rstrip(".")
+    return price_text, f"only {price_text} with free shipping", f"{price_text} shipped", f"Tap the product link while it is {price_text} shipped."
+
+
+def script_cover_caption(topic, color, cover_price, price_cta, reference=None):
+    if reference:
+        angle = str(reference.get("video_angle") or "")
+        if "发顶" in angle or topic == "natural top":
+            return (
+                f"scalp detail looks real {cover_price}".strip(),
+                f"Natural-looking part line, soft movement, {color} everyday wig. {price_cta}",
+            )
+        if "颜色" in angle or topic == "color in natural light":
+            return (
+                f"{color} in natural light {cover_price}".strip(),
+                f"Soft dimensional color, easy everyday shape, and a natural full look. {price_cta}",
+            )
+        if "新手" in angle or topic == "beginner friendly":
+            return (
+                f"beginner friendly wig {cover_price}".strip(),
+                f"No complicated install, just put it on and go. {color} wig, easy everyday look. {price_cta}",
+            )
+        if "背面" in angle or topic == "back view":
+            return (
+                f"full back view {cover_price}".strip(),
+                f"Soft volume from the back, flattering movement, and a full everyday look. {price_cta}",
+            )
+    return (
+        f"{topic} {color} wig {cover_price}".strip(),
+        f"{color} wig, {topic}, beginner friendly. {price_cta}",
+    )
+
+
+def product_terms(text):
+    stop = {"with", "wig", "hair", "synthetic", "heat", "resistant", "women", "long", "short", "material", "fiber", "daily", "party"}
+    return {
+        w for w in re.findall(r"[a-z0-9]+", str(text or "").lower())
+        if len(w) >= 4 and w not in stop
+    }
+
+
+def repeat_template_score(row, sku_info):
+    target_sku = str(sku_info.get("sku") or "").lower()
+    target_simple = str(sku_info.get("simple_sku") or "").lower()
+    target_product = str(sku_info.get("tiktok_product_id") or "").lower()
+    row_sku = str(row.get("sku") or "").lower()
+    row_simple = str(row.get("simple_sku") or "").lower()
+    row_product = str(row.get("tiktok_product_id") or "").lower()
+
+    relation_score = 0
+    relation = "全局高表现"
+    if target_sku and row_sku and target_sku == row_sku:
+        relation_score, relation = 1400, "同SKU"
+    elif target_simple and row_simple and target_simple == row_simple:
+        relation_score, relation = 1300, "同简化SKU"
+    elif target_product and row_product and target_product == row_product:
+        relation_score, relation = 1250, "同TikTok商品ID"
+    else:
+        overlap = product_terms(sku_info.get("product_name")) & product_terms(row.get("product_name"))
+        if overlap:
+            relation_score, relation = min(500, 120 + len(overlap) * 60), "相似商品"
+
+    diagnosis = f"{row.get('local_diagnosis') or ''} {row.get('repeat_action') or ''}"
+    diagnosis_score = 0
+    if "可复拍" in diagnosis:
+        diagnosis_score += 700
+    if "高转化" in diagnosis:
+        diagnosis_score += 450
+    if "点击高" in diagnosis:
+        diagnosis_score += 180
+
+    views = safe_int(row.get("vv"))
+    clicks = safe_int(row.get("product_clicks"))
+    orders = safe_int(row.get("attributed_sku_orders"))
+    gmv = safe_float(row.get("attributed_gmv"))
+    ctr = safe_float(row.get("video_ctr"))
+    performance_score = min(views / 30, 260) + clicks * 3 + orders * 160 + gmv * 0.8 + ctr * 25
+    score = relation_score + diagnosis_score + performance_score
+    return score, relation
+
+
+def format_repeat_reference(item):
+    views = safe_int(item.get("vv"))
+    clicks = safe_int(item.get("product_clicks"))
+    orders = safe_int(item.get("attributed_sku_orders"))
+    gmv = safe_float(item.get("attributed_gmv"))
+    ctr = safe_float(item.get("video_ctr"))
+    hook = first_sentence(item.get("video_info"), 180) or "This whole look is ready in seconds."
+    angle = infer_tiktok_video_angle(f"{item.get('video_info') or ''} {item.get('product_name') or ''}")
+    reason_bits = [
+        item.get("relation") or "高表现视频",
+        item.get("local_diagnosis") or "数据表现可参考",
+        f"播放 {views}",
+        f"点击 {clicks}",
+        f"CTR {ctr:.2f}%",
+        f"订单 {orders}",
+        f"GMV ${gmv:.2f}",
+    ]
+    return {
+        "video_id": item.get("video_id"),
+        "relation": item.get("relation"),
+        "sku": item.get("sku"),
+        "simple_sku": item.get("simple_sku"),
+        "tiktok_product_id": item.get("tiktok_product_id"),
+        "product_name": item.get("product_name"),
+        "video_info_excerpt": hook,
+        "video_angle": angle,
+        "diagnosis": item.get("local_diagnosis"),
+        "repeat_action": item.get("repeat_action"),
+        "metrics": {
+            "views": views,
+            "clicks": clicks,
+            "orders": orders,
+            "gmv": round(gmv, 2),
+            "ctr": round(ctr, 2),
+        },
+        "reason": " / ".join(str(x) for x in reason_bits if x),
+        "score": item.get("score"),
+    }
+
+
+def find_repeat_script_template(conn, sku_info, preferred_video_id=""):
+    preferred_video_id = str(preferred_video_id or "").strip()
+    if preferred_video_id:
+        row = conn.execute("""
+            SELECT video_id, sku, simple_sku, tiktok_product_id, product_name, video_info,
+                   vv, product_clicks, attributed_sku_orders, attributed_gmv, video_ctr,
+                   product_impressions, likes_count, comments_count, shares_count,
+                   local_diagnosis, platform_diagnosis, repeat_action, publish_time
+            FROM tiktok_video_performance
+            WHERE video_id = ?
+            LIMIT 1
+        """, (preferred_video_id,)).fetchone()
+        if not row:
+            return None
+        item = dict(row)
+        item["relation"] = "指定视频ID"
+        item["score"] = 999999
+        return format_repeat_reference(item)
+
+    rows = conn.execute("""
+        SELECT video_id, sku, simple_sku, tiktok_product_id, product_name, video_info,
+               vv, product_clicks, attributed_sku_orders, attributed_gmv, video_ctr,
+               product_impressions, likes_count, comments_count, shares_count,
+               local_diagnosis, platform_diagnosis, repeat_action, publish_time
+        FROM tiktok_video_performance
+        WHERE video_id IS NOT NULL AND video_id != ''
+          AND (COALESCE(vv, 0) > 0 OR COALESCE(product_clicks, 0) > 0 OR COALESCE(attributed_sku_orders, 0) > 0)
+        ORDER BY imported_at DESC, id DESC
+        LIMIT 1000
+    """).fetchall()
+    best = None
+    for row in rows:
+        item = dict(row)
+        views = safe_int(item.get("vv"))
+        clicks = safe_int(item.get("product_clicks"))
+        orders = safe_int(item.get("attributed_sku_orders"))
+        diagnosis = f"{item.get('local_diagnosis') or ''} {item.get('repeat_action') or ''}"
+        worth_repeating = (
+            "可复拍" in diagnosis or "高转化" in diagnosis or orders > 0 or
+            clicks >= 20 or (views >= 1000 and safe_float(item.get("video_ctr")) >= 2)
+        )
+        if not worth_repeating:
+            continue
+        score, relation = repeat_template_score(item, sku_info)
+        if not best or score > best["score"]:
+            item["score"] = round(score, 2)
+            item["relation"] = relation
+            best = item
+    if not best:
+        return None
+    return format_repeat_reference(best)
+
+
+def sku_info_from_reference(conn, reference, preferred_sku=""):
+    tokens = [
+        preferred_sku,
+        reference.get("sku") if reference else "",
+        reference.get("simple_sku") if reference else "",
+        reference.get("tiktok_product_id") if reference else "",
+    ]
+    for token in tokens:
+        found = find_tiktok_sku_info(conn, token)
+        if found:
+            return found
+
+    sku = (preferred_sku or (reference or {}).get("sku") or (reference or {}).get("simple_sku") or "").strip()
+    simple_sku = (reference or {}).get("simple_sku") or simplify_sku(sku)
+    return {
+        "sku": sku,
+        "simple_sku": simple_sku,
+        "tiktok_product_id": (reference or {}).get("tiktok_product_id") or "",
+        "product_name": (reference or {}).get("product_name") or "",
+        "color": infer_wig_color((reference or {}).get("product_name"), (reference or {}).get("video_info_excerpt")),
+        "length": "",
+        "price": 23.99,
+        "source": "video_id",
+        "label": f"{sku} ({simple_sku})" if sku else simple_sku,
+    }
+
+
+def build_tiktok_script(sku_info, angle, reference=None):
+    sku = sku_info.get("sku") or "SKU"
+    simple_sku = sku_info.get("simple_sku") or simplify_sku(sku)
+    tiktok_product_id = sku_info.get("tiktok_product_id") or ""
+    product_name = sku_info.get("product_name") or ""
+    ref_text = reference.get("video_info_excerpt") if reference else ""
+    color = sku_info.get("color") or infer_wig_color(product_name, ref_text)
+    length = sku_info.get("length") or ""
+    short_name = concise_wig_name(product_name, f"{length} {color} wig".strip())
+    effective_angle = (reference or {}).get("video_angle") or angle
+    topic, display_order, default_hook = script_angle_profile(effective_angle)
+    hook = ref_text or default_hook
+    price_text, price_phrase, cover_price, price_cta = script_price_parts(sku_info.get("price"))
+
+    if reference:
+        source_sku = reference.get("sku") or "-"
+        source_simple = reference.get("simple_sku") or "-"
+        source_product_id = reference.get("tiktok_product_id") or "-"
+        voiceover = (
+            f"{hook} "
+            f"Now use that same proven structure for this {short_name}: start with the {topic}, show the soft movement, then finish with the full look. "
+            f"The {color} blend feels easy for everyday wear, it is beginner friendly, and {price_cta.lower()}"
+        )
+        short_voiceover = (
+            f"{hook} {color} wig, {topic}, easy everyday look. Tap to shop."
+        )
+        source_note = (
+            f"模式: 复拍模板模仿；当前生成SKU {sku} / 简化SKU {simple_sku or '-'} / 商品ID {tiktok_product_id or '-'}。"
+            f"模仿来源视频 {reference.get('video_id')}，来源SKU {source_sku} / 简化SKU {source_simple} / 商品ID {source_product_id}。"
+            f"逻辑: 只借来源视频的开头钩子、卖点角度和展示顺序，商品信息使用当前SKU。原因: {reference.get('reason')}"
+        )
+    else:
+        voiceover = (
+            f"If you want an easy everyday wig, this {short_name} is the one. "
+            f"Show the {topic}, check the natural movement, and {price_cta.lower()}"
+        )
+        short_voiceover = (
+            f"This {color} wig is beginner friendly, easy to wear. {price_cta}"
+        )
+        source_note = (
+            f"模式: 冷启动模板；当前生成SKU {sku} / 简化SKU {simple_sku or '-'} / 商品ID {tiktok_product_id or '-'}。"
+            "未找到可用的 TikTok Videos 复拍来源，所以按当前SKU和卖点角度生成基础脚本。"
+        )
+
+    cover_text, caption = script_cover_caption(topic, color, cover_price, price_cta, reference)
+    if price_text:
+        selling_points = f"{topic}, {color}, beginner friendly, {price_text} free shipping"
+        pinned = f"SKU {sku}: {color}, {topic}, {price_text} free shipping."
+    else:
+        selling_points = f"{topic}, {color}, beginner friendly, today’s deal"
+        pinned = f"SKU {sku}: {color}, {topic}, beginner friendly. Check today's deal."
     return {
         "hook": hook,
-        "selling_points": f"{topic}, {color}, beginner friendly, {price_text} free shipping",
+        "video_angle": effective_angle,
+        "target_sku": sku,
+        "target_simple_sku": simple_sku,
+        "target_tiktok_product_id": tiktok_product_id,
+        "selling_points": selling_points,
         "display_order": display_order,
-        "voiceover": (
-            f"If you want an easy everyday wig, this {product_name} is the one. "
-            f"Show the {topic}, check the natural movement, and it is only {price_text} with free shipping. "
-            "Tap the product link before it sells out."
-        ),
-        "short_voiceover": (
-            f"This {color} wig is beginner friendly, easy to wear, and only {price_text} shipped. "
-            "Tap to get yours."
-        ),
-        "cover_text": f"{color} wig {price_text} shipped",
-        "caption": f"{color} wig, beginner friendly, {price_text} free shipping. Tap the product link.",
+        "voiceover": voiceover,
+        "short_voiceover": short_voiceover,
+        "cover_text": cover_text,
+        "caption": caption,
         "hashtags": "#wig #syntheticwig #beginnerwig #tiktokshop #affordablewig",
-        "live_pitch": f"This is {sku}, a {color} wig that is easy for beginners. It is {price_text} with free shipping today.",
-        "pinned_comment": f"SKU {sku}: {color}, beginner friendly, {price_text} free shipping."
+        "live_pitch": f"This is {sku}, a {color} wig that follows a proven repeatable video structure.",
+        "pinned_comment": pinned,
+        "source_note": source_note,
     }
 
 
@@ -810,14 +1105,14 @@ def split_tiktok_product(raw_product):
 
 def infer_tiktok_video_angle(text):
     lower = (text or "").lower()
-    if any(word in lower for word in ["outdoor", "light", "color", "blonde", "brown", "highlight"]):
-        return "颜色自然光"
-    if any(word in lower for word in ["top", "part", "hairline", "natural-looking top"]):
+    if any(word in lower for word in ["scalp", "top", "part", "hairline", "natural-looking top", "part line"]):
         return "发顶自然"
-    if any(word in lower for word in ["back", "layers", "full"]):
-        return "背面发量"
     if any(word in lower for word in ["beginner", "glueless", "wear & go", "easy to wear"]):
         return "新手友好"
+    if any(word in lower for word in ["back", "layers", "full"]):
+        return "背面发量"
+    if any(word in lower for word in ["outdoor", "light", "color", "blonde", "brown", "highlight"]):
+        return "颜色自然光"
     if "23.99" in lower or "$23" in lower:
         return "23.99包邮"
     return "整体效果"
@@ -3481,18 +3776,54 @@ async def tiktok_script_generate(request: Request):
     data = await request.json()
     sku = data.get("sku", "").strip()
     angle = data.get("video_angle", "整体效果").strip() or "整体效果"
+    reference_video_id = str(data.get("reference_video_id", "") or "").strip()
     conn = get_db()
     try:
+        reference = None
+        if reference_video_id:
+            reference = find_repeat_script_template(conn, {}, reference_video_id)
+            if not reference:
+                return {
+                    "status": "error",
+                    "message": f"未找到视频ID {reference_video_id}，请先确认 TikTok Videos表 已导入这条视频。",
+                }
+
         info = find_tiktok_sku_info(conn, sku) if sku else None
+        if reference and not info:
+            info = sku_info_from_reference(conn, reference, sku)
         if not info:
             info = {
                 "sku": sku,
+                "simple_sku": simplify_sku(sku),
+                "tiktok_product_id": str(data.get("tiktok_product_id", "") or "").strip(),
                 "product_name": data.get("product_name", "").strip(),
                 "color": data.get("color", "").strip(),
                 "length": data.get("length", "").strip(),
                 "price": safe_float(data.get("price"), 23.99)
             }
-        return {"status": "ok", "sku_info": info, "script": build_tiktok_script(info, angle)}
+        if not reference:
+            reference = find_repeat_script_template(conn, info)
+        script = build_tiktok_script(info, angle, reference)
+        return {"status": "ok", "sku_info": info, "reference": reference, "script": script}
+    finally:
+        conn.close()
+
+
+@app.get("/api/tiktok/script/reference")
+async def tiktok_script_reference(video_id: str):
+    video_id = str(video_id or "").strip()
+    if not video_id:
+        return {"status": "error", "message": "视频ID必填"}
+    conn = get_db()
+    try:
+        reference = find_repeat_script_template(conn, {}, video_id)
+        if not reference:
+            return {
+                "status": "error",
+                "message": f"未找到视频ID {video_id}，请先在 TikTok Videos表 导入这条视频。",
+            }
+        info = sku_info_from_reference(conn, reference)
+        return {"status": "ok", "sku_info": info, "reference": reference}
     finally:
         conn.close()
 

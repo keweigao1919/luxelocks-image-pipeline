@@ -138,11 +138,16 @@
     </div>
 
     <div class="tt-card">
-        <div class="tt-card-header" title="用途：把SKU资料和卖点角度转换成TikTok视频口播、展示顺序、封面文案、发布文案和标签。数据来源：SKU利润/补货表 + TikTok SKUs映射表。">脚本工厂</div>
+        <div class="tt-card-header" title="用途：先输入 TikTok Videos 表里的视频ID，系统带出这条视频对应的SKU/简化SKU/商品ID，再模仿该视频的可复拍结构生成卖点角度、口播、封面和发布文案。">脚本工厂</div>
         <div class="tt-card-body">
             <div class="tt-field" style="margin-bottom:10px">
-                <label title="操作方法：可输入完整SKU、简化SKU或TikTok商品ID；候选来源为 SKU利润/补货表 + TikTok SKUs表。">SKU / 简化SKU / 商品ID</label>
-                <input id="scriptSku" list="scriptSkuList" placeholder="输入SKU、简化SKU或TikTok商品ID..." title="输入时浏览器会弹出候选。例：输入 1261-4 可匹配 SWLC1261-4...；输入 TikTok商品ID 可匹配映射表SKU。">
+                <label title="主操作入口：输入 TikTok Videos表 的视频ID。系统会读取这条视频的SKU、简化SKU、商品ID、诊断、播放、点击、成交和GMV，用它作为脚本模仿来源。">视频ID（模仿来源）</label>
+                <input id="scriptReferenceVideoId" placeholder="例如 7617077727782259982" autocomplete="off" title="输入或粘贴视频ID后离开输入框，系统会自动带出这条视频对应的SKU / 简化SKU / 商品ID。生成脚本时会高度模仿这条视频的开头、卖点角度和展示顺序。">
+                <div id="scriptVideoHint" class="tt-muted" style="margin-top:4px" title="视频ID匹配提示：这里会显示来源视频的SKU、简化SKU、商品ID、诊断和关键数据。">输入视频ID后会带出对应 SKU / 简化SKU / 商品ID</div>
+            </div>
+            <div class="tt-field" style="margin-bottom:10px">
+                <label title="默认由视频ID带出：表示这次脚本要生成哪一个SKU。需要跨款复拍时，也可以手动改成其他SKU、简化SKU或TikTok商品ID。">当前生成 SKU / 简化SKU / 商品ID</label>
+                <input id="scriptSku" list="scriptSkuList" placeholder="先输入视频ID自动带出；也可手动输入SKU..." title="默认由视频ID对应的视频带出。例：视频ID 7617077727782259982 会带出 3172-3 / 简化SKU 3172-3 / 商品ID 1729476593496135440。">
                 <datalist id="scriptSkuList">
                     {% for s in skus %}
                     <option value="{{ s.sku }}" label="{{ s.label or s.sku }}"></option>
@@ -153,14 +158,18 @@
                 <div id="scriptSkuHint" class="tt-muted" style="margin-top:4px" title="匹配提示：这里会显示当前输入匹配到的完整SKU、简化SKU、TikTok商品ID和来源。">输入后会自动匹配 SKU 来源</div>
             </div>
             <div class="tt-field" style="margin-bottom:10px">
-                <label title="逻辑来源：内置卖点池。不同角度会影响开头钩子、展示顺序和文案重点。">卖点角度</label>
-                <select id="scriptAngle" title="选择视频主卖点：整体效果/发顶自然/颜色自然光/背面发量/新手友好等。">
+                <label title="优先由视频ID对应的视频内容自动识别。比如视频文案出现 scalp detail / part line，会识别为发顶自然；如果没有视频ID，才按手动选择。">卖点角度</label>
+                <select id="scriptAngle" title="视频ID识别出的卖点角度会自动填到这里。你也可以手动改成整体效果、发顶自然、颜色自然光、背面发量或新手友好。">
                     {% for a in angle_pool %}<option value="{{ a }}">{{ a }}</option>{% endfor %}
                 </select>
             </div>
-            <button class="btn btn-primary" onclick="generateScript()" title="按SKU和卖点角度生成口播、展示顺序、封面、文案和标签；SKU可来自 TikTok SKUs表映射。">生成脚本</button>
+            <button class="btn btn-primary" onclick="generateScript()" title="按视频ID模仿来源生成脚本：视频ID决定模仿哪条视频，当前SKU决定这次脚本写哪一款。">生成脚本</button>
             <div class="tt-field" style="margin-top:12px">
-                <label title="输出逻辑：根据SKU资料和卖点角度生成15秒左右口播，并附带8秒短版。可直接给剪映/CapCut做字幕或口播。">口播</label>
+                <label title="显示脚本为什么这么生成：当前SKU、来源视频ID、来源SKU、诊断、播放/点击/成交/GMV、展示顺序和模仿规则。">生成逻辑 / 视频来源</label>
+                <textarea id="scriptSource" class="tt-textarea-output" readonly title="内部参考信息：用于确认脚本模仿的是哪条视频、对应哪个SKU、为什么值得模仿。"></textarea>
+            </div>
+            <div class="tt-field" style="margin-top:12px">
+                <label title="输出逻辑：用来源视频的开头钩子、卖点角度和展示顺序，替换成当前SKU的信息，生成15秒左右口播，并附带8秒短版。">口播</label>
                 <textarea id="scriptVoiceover" class="tt-textarea-output" readonly title="生成结果区域：包含较完整口播和8秒短口播。操作：点击下方复制按钮复制全部脚本。"></textarea>
             </div>
             <div class="tt-field" style="margin-top:10px">
@@ -379,22 +388,87 @@ function updateScriptSkuHint(){
     }
 }
 function quickScript(sku){ setVal('scriptSku', sku); updateScriptSkuHint(); setVal('scriptAngle', '整体效果'); generateScript(); }
+function metricText(ref){
+    var m = (ref && ref.metrics) || {};
+    return '播放 ' + (m.views || 0) + ' / 点击 ' + (m.clicks || 0) + ' / CTR ' + (m.ctr || 0) + '% / 订单 ' + (m.orders || 0) + ' / GMV $' + (m.gmv || 0);
+}
+function applyScriptReference(d){
+    var ref = d.reference || {};
+    var info = d.sku_info || {};
+    var hint = document.getElementById('scriptVideoHint');
+    if(info.sku){
+        setVal('scriptSku', info.sku);
+        updateScriptSkuHint();
+    }
+    if(ref.video_angle){ setVal('scriptAngle', ref.video_angle); }
+    if(hint && ref.video_id){
+        hint.textContent = '已找到视频 ' + ref.video_id + '：当前生成SKU ' + (info.sku || ref.sku || '-') + ' / 简化SKU ' + (info.simple_sku || ref.simple_sku || '-') + ' / 商品ID ' + (info.tiktok_product_id || ref.tiktok_product_id || '-') + '；来源视频原始SKU ' + (ref.sku || '-') + ' / ' + (ref.diagnosis || '无诊断') + ' / ' + metricText(ref);
+        hint.style.color = '#27ae60';
+    }
+}
+function formatScriptSource(d){
+    var s = d.script || {};
+    var ref = d.reference || {};
+    var info = d.sku_info || {};
+    var lines = [
+        '当前生成SKU: ' + (info.sku || s.target_sku || '-') + ' / 简化SKU ' + (info.simple_sku || s.target_simple_sku || '-') + ' / 商品ID ' + (info.tiktok_product_id || s.target_tiktok_product_id || '-'),
+        '卖点角度: ' + (s.video_angle || ref.video_angle || val('scriptAngle') || '-'),
+        '展示顺序: ' + (s.display_order || '-')
+    ];
+    if(ref.video_id){
+        lines.push('模仿视频ID: ' + ref.video_id);
+        lines.push('来源款号: SKU ' + (ref.sku || '-') + ' / 简化SKU ' + (ref.simple_sku || '-') + ' / 商品ID ' + (ref.tiktok_product_id || '-'));
+        lines.push('来源诊断: ' + (ref.diagnosis || '-') + ' / 复拍动作: ' + (ref.repeat_action || '-'));
+        lines.push('来源数据: ' + metricText(ref));
+        lines.push('来源开头: ' + (ref.video_info_excerpt || '-'));
+    }
+    lines.push('生成逻辑: ' + (s.source_note || ''));
+    return lines.join('\n');
+}
+async function lookupScriptVideo(){
+    var videoId = val('scriptReferenceVideoId').trim();
+    var hint = document.getElementById('scriptVideoHint');
+    if(!videoId){
+        if(hint){
+            hint.textContent = '输入视频ID后会带出对应 SKU / 简化SKU / 商品ID';
+            hint.style.color = '#888';
+        }
+        return;
+    }
+    var r = await fetch('/api/tiktok/script/reference?video_id=' + encodeURIComponent(videoId));
+    var d = await r.json();
+    if(d.status !== 'ok'){
+        if(hint){
+            hint.textContent = d.message || '未找到这个视频ID';
+            hint.style.color = '#e67e22';
+        }
+        return;
+    }
+    applyScriptReference(d);
+}
 async function generateScript(){
     var sku = val('scriptSku');
-    if(!sku){ showToast('先新增SKU'); return; }
-    var r = await fetch('/api/tiktok/script/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sku:sku, video_angle:val('scriptAngle')})});
+    var videoId = val('scriptReferenceVideoId').trim();
+    if(!videoId && !sku){ showToast('先输入视频ID'); return; }
+    var r = await fetch('/api/tiktok/script/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sku:sku, reference_video_id:videoId, video_angle:val('scriptAngle')})});
     var d = await r.json();
-    if(d.status !== 'ok'){ showToast('生成失败'); return; }
+    if(d.status !== 'ok'){ showToast('生成失败: ' + (d.message || '')); return; }
     var s = d.script;
+    if(d.reference && d.reference.video_id){
+        setVal('scriptReferenceVideoId', d.reference.video_id);
+    }
     if(d.sku_info && d.sku_info.sku){
         setVal('scriptSku', d.sku_info.sku);
         updateScriptSkuHint();
     }
+    if(s.video_angle){ setVal('scriptAngle', s.video_angle); }
+    applyScriptReference(d);
+    setVal('scriptSource', formatScriptSource(d));
     setVal('scriptVoiceover', s.voiceover + '\n\n8秒版: ' + s.short_voiceover);
     setVal('scriptCaption', '封面: ' + s.cover_text + '\n发布文案: ' + s.caption + '\n标签: ' + s.hashtags + '\n置顶评论: ' + s.pinned_comment);
 }
 function copyScript(){
-    var text = val('scriptVoiceover') + '\n\n' + val('scriptCaption');
+    var text = val('scriptSource') + '\n\n' + val('scriptVoiceover') + '\n\n' + val('scriptCaption');
     navigator.clipboard.writeText(text).then(function(){ showToast('已复制'); });
 }
 
@@ -550,10 +624,20 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     var scriptSku = document.getElementById('scriptSku');
     if(scriptSku){
-        if(!scriptSku.value && skuData.length > 0) scriptSku.value = skuData[0].sku || '';
         scriptSku.addEventListener('input', updateScriptSkuHint);
         scriptSku.addEventListener('change', updateScriptSkuHint);
         updateScriptSkuHint();
+    }
+    var scriptReferenceVideoId = document.getElementById('scriptReferenceVideoId');
+    if(scriptReferenceVideoId){
+        scriptReferenceVideoId.addEventListener('change', lookupScriptVideo);
+        scriptReferenceVideoId.addEventListener('blur', lookupScriptVideo);
+        scriptReferenceVideoId.addEventListener('keydown', function(e){
+            if(e.key === 'Enter'){
+                e.preventDefault();
+                lookupScriptVideo();
+            }
+        });
     }
 });
 </script>
