@@ -3149,19 +3149,13 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
         stats_d = dict(stats)
         stats_d["mapped"] = (stats_d.get("total") or 0) - (stats_d.get("unmapped") or 0)
         stats_d["ctr"] = round((stats_d.get("clicks") or 0) / max(stats_d.get("views") or 0, 1) * 100, 2)
-        return render_html(
-            "tiktok_videos.html",
-            request,
-            rows=[dict(r) for r in rows],
-            stats=stats_d,
-            search=search,
-            mapped=mapped,
-            page=page,
-            total_pages=total_pages,
-            total=total,
-            sort=sort,
-            order=order
-        )
+        is_partial = request.query_params.get("partial") == "1"
+        tmpl = "_tiktok_videos_table.html" if is_partial else "tiktok_videos.html"
+        return render_html(tmpl, request,
+            rows=[dict(r) for r in rows], stats=stats_d,
+            search=search, mapped=mapped, page=page,
+            total_pages=total_pages, total=total,
+            sort=sort, order=order)
     finally:
         conn.close()
 

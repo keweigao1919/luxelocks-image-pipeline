@@ -30,130 +30,53 @@
 <div id="tvPage">
 <div class="tv-head">
     <div>
-        <h2 title="页面用途：保存 TikTok Shop Video Performance List 导出的原始视频表现字段，并自动同步到 TikTok Wig Ops 的视频复盘表。">📹 TikTok Videos表</h2>
-        <div class="tv-sub" title="关系说明：本页是原始数据层；TikTok Wig Ops 是运营复盘层。导入后，本页保存全部字段，Wig Ops 读取 views/clicks/orders/gmv/diagnosis 做复盘。">导入 TikTok 视频表现表，沉淀原始数据并同步复盘</div>
+        <h2 title="页面用途：导入TikTok Shop Video Performance List xlsx 并自动同步到 Wig Ops 视频复盘。">🎥 TikTok Videos表</h2>
+        <div class="tv-sub" title="数据来源：TikTok导出视频表现xlsx。每行=一条视频的一次表现快照；导入时按视频ID+商品ID去重更新。导入后系统按SKU与TikTok SKUs表联动">视频表现导入 ({{ stats.total or 0 }} 条, 最后导入: {{ stats.latest_import or '-' }})</div>
     </div>
     <div class="tv-actions">
-        <a class="btn btn-sm" href="/tiktok" style="background:#eee;text-decoration:none" title="打开 TikTok Wig Ops 中控，查看同步后的复盘、排期和脚本。">去 Wig Ops</a>
-        <a class="btn btn-sm" href="/tiktok-sku" style="background:#eee;text-decoration:none" title="打开 TikTok SKUs表，维护 TikTok商品ID 与 Shopify SKU 的映射。映射越完整，复盘就越能对应到SKU利润和库存。">SKU映射</a>
+        <a class="btn btn-sm" href="/tiktok-sku" style="background:#eee;text-decoration:none" title="打开 TikTok SKUs表，维护 TikTok商品ID 与 Shopify SKU 的映射。">SKU映射</a>
     </div>
 </div>
 
 <div class="stats col4">
-    <div class="stat-card" title="数据来源：tiktok_video_performance 表。含义：已导入的视频-商品表现行数；同一视频挂多个商品时可能有多行。"><div class="label">视频表现行</div><div class="value">{{ stats.total or 0 }}</div></div>
-    <div class="stat-card" title="映射逻辑：商品字段末尾括号里的 TikTok商品ID 能在 TikTok SKUs表找到 SKU 时，计为已映射。"><div class="label">已映射</div><div class="value" style="color:#27ae60">{{ stats.mapped or 0 }}</div></div>
+    <div class="stat-card" title="映射逻辑：tiktok_product_id 能在 TikTok SKUs表找到 simple_sku 时，计为已映射。"><div class="label">已映射</div><div class="value" style="color:#27ae60">{{ stats.mapped or 0 }}</div></div>
     <div class="stat-card" title="未映射逻辑：tiktok_product_id 在 TikTok SKUs 表找不到对应 simple_sku。建议去补录映射。"><div class="label">未映射</div><div class="value" style="color:#e67e22">{{ stats.unmapped or 0 }}</div></div>
-    <div class="stat-card" title="计算逻辑：总商品点击 / 总VV × 100%。用于整体判断视频是否能把观看转成商品兴趣。"><div class="label">整体CTR</div><div class="value" style="color:#3498db">{{ stats.ctr or 0 }}%</div></div>
+    <div class="stat-card" title="总VV：所有视频播放量之和。"><div class="label">总VV</div><div class="value" style="color:#2c3e50">{{ stats.views or 0 }}</div></div>
+    <div class="stat-card" title="CTR：商品点击数 / 播放量 × 100%。"><div class="label">CTR</div><div class="value" style="color:#2196f3">{{ stats.ctr or 0 }}%</div></div>
 </div>
 
 <div class="tv-card">
     <div class="tv-card-header">
-        <span title="导入说明：上传 TikTok 后台导出的 Video Performance List .xlsx。系统会读取第一张表，要求含有达人昵称、视频ID、发布时间、商品、VV、商品点击次数等字段。">导入 XLSX</span>
-        <span class="tv-muted" title="最近导入时间来自 tiktok_video_performance.imported_at。">{{ stats.latest_import or '尚未导入' }}</span>
-    </div>
-    <div class="tv-card-body">
-        <form class="tv-upload" id="importForm" onsubmit="importVideos(event)">
-            <input id="videoFile" name="file" type="file" accept=".xlsx" required title="选择 TikTok Shop 导出的 Video Performance List .xlsx 文件。导入后会保存原始字段，并同步到 Wig Ops 视频复盘。">
-            <button class="btn btn-primary" id="importBtn" type="submit" title="开始导入：按 视频ID + TikTok商品ID 去重更新；导入行会同步到 tiktok_videos 复盘表，posted=1，不会计入待发布。">导入视频表现</button>
-            <span id="importMsg" class="tv-muted" title="导入结果会显示导入行数、同步复盘数、未映射商品数和跳过行数。"></span>
+        <span title="上传说明：支持 TikTok Shop Video Performance List .xlsx。每次导入按视频ID+商品ID去重更新。">上传视频表现 XLSX</span>
+        <form id="uploadForm" class="tv-upload" onsubmit="importVideos(event)">
+            <input type="file" id="videoFile" accept=".xlsx" title="选择 TikTok Shop Video Performance List .xlsx。">
+            <button class="btn btn-primary" id="importBtn" type="submit" title="开始导入：按视频ID+TikTok商品ID去重更新。">导入视频表现</button>
         </form>
     </div>
+    <div class="tv-card-body">
+        <div id="importMsg" style="font-size:12px;color:#888;margin-bottom:8px"></div>
+    </div>
 </div>
 
 <div class="tv-card">
     <div class="tv-card-header">
-        <span title="表格说明：这里显示 TikTok 原始导入字段和系统补充字段。Wig Ops 复盘会使用 VV、商品点击、订单、GMV、本地诊断和复拍动作。">视频表现明细</span>
-        <span class="tv-muted" title="当前最多显示500行；可用搜索和映射状态筛选。">显示 {{ rows|length }} 行</span>
+        <span title="表格说明：每一行代表一个视频的一次表现数据。按发布时间降序排列。">视频列表</span>
     </div>
     <div class="tv-card-body">
         <div class="tv-filter">
             <input id="searchBox" class="search-box" value="{{ search or '' }}" placeholder="搜索视频/商品/SKU/达人..." title="搜索范围：达人昵称、视频信息、视频ID、商品名、TikTok商品ID、SKU、简化SKU。" onkeydown="if(event.key==='Enter')applyFilter()">
-            <select id="mappedFilter" title="筛选映射状态：全部、已映射、未映射。未映射行会用 TT-商品ID 临时占位。">
+            <select id="mappedFilter" title="筛选映射状态：全部、已映射、未映射。">
                 <option value="all" {% if mapped == 'all' %}selected{% endif %}>全部</option>
                 <option value="mapped" {% if mapped == 'mapped' %}selected{% endif %}>已映射</option>
                 <option value="unmapped" {% if mapped == 'unmapped' %}selected{% endif %}>未映射</option>
             </select>
             <button class="btn btn-sm btn-primary" onclick="applyFilter()" title="按搜索词和映射状态刷新表格。">筛选</button>
-            <a class="btn btn-sm" href="/tiktok-videos" style="background:#eee;text-decoration:none" title="清除搜索词和映射状态，显示最新导入的前500行。">清除</a>
+            <a class="btn btn-sm" href="/tiktok-videos" style="background:#eee;text-decoration:none" title="清除搜索词和映射状态。">清除</a>
         </div>
 
-        {% if rows %}
-        <div class="tv-table-wrap">
-            <table class="tv-table">
-                <thead>
-                    <tr>
-                        <th title="发布时间：来自 TikTok 导出字段 发布时间。">发布时间</th>
-                        <th title="达人：来自 达人昵称 和 达人ID。用于判断哪个账号/达人带货效果更好。">达人</th>
-                        <th title="视频：来自 视频信息 和 视频ID。视频信息通常包含口播/发布文案/标签。">视频</th>
-                        <th title="商品：来自 商品 字段。">商品</th>
-                        <th title="SKU映射：来自 TikTok SKUs表。未映射会显示 TT-商品ID，建议补映射。">SKU</th>
-                        <th title="TikTok商品ID：19位数字，来自商品字段末尾括号提取，用于匹配 TikTok SKUs表。">商品ID</th>
-                        {% set base = '/tiktok-videos?mapped=' + (mapped or 'all') + '&search=' + (search or '') %}
-                        {% macro sort_link(label, col, title) -%}
-                        {% set next_order = 'asc' if (sort == col and order == 'desc') else 'desc' %}
-                        {% set arrow = '▼' if (sort == col and order == 'desc') else ('▲' if sort == col else '') %}
-                        <th title="{{ title }} 点击排序">
-                            <a href="{{ base }}&sort={{ col }}&order={{ next_order }}&page=1" style="text-decoration:none;color:{% if sort==col %}#e94560{% else %}#666{% endif %};white-space:nowrap">
-                                {{ label }}{% if arrow %} {{ arrow }}{% endif %}
-                            </a>
-                        </th>
-                        {%- endmacro %}
-                        {{ sort_link('VV', 'vv', '视频观看量') }}
-                        {{ sort_link('互动', 'likes_count', '点赞数(互动)') }}
-                        {{ sort_link('曝光/点击', 'product_clicks', '商品点击次数') }}
-                        {{ sort_link('订单', 'attributed_sku_orders', '归因SKU订单数') }}
-                        {{ sort_link('件数', 'attributed_units', '归因成交件数') }}
-                        {{ sort_link('GMV', 'attributed_gmv', '视频归因GMV($)') }}
-                        <th title="效率：点击率、引流率、完播率、CTOR、GPM。">效率</th>
-                        <th title="诊断：TikTok导出诊断 + 系统本地复盘诊断和复拍建议。">诊断</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in rows %}
-                    <tr>
-                        <td title="发布时间原始值：{{ r.publish_time or '-' }}">{{ r.publish_time or '-' }}</td>
-                        <td title="达人昵称：{{ r.creator_nickname or '-' }}；达人ID：{{ r.creator_id or '-' }}">{{ r.creator_nickname or '-' }}<div class="tv-muted">{{ r.creator_id or '-' }}</div></td>
-                        <td class="tv-video" title="视频ID：{{ r.video_id or '-' }}；视频信息：{{ r.video_info or '-' }}"><strong>{{ r.video_id or '-' }}</strong><div class="tv-muted">{{ r.video_info or '-' }}</div></td>
-                        <td class="tv-product" title="商品名：{{ r.product_name or '-' }}">{{ r.product_name or '-' }}</td>
-                        <td title="映射结果：{{ r.sku or '未映射' }}。{% if r.sku %}已映射到 simple_sku，可与 Wig Ops SKU利润/库存对应。{% else %}该商品ID未在 TikTok SKUs表建立映射，请去补录。{% endif %}">
-                            {% if r.sku %}<span class="tv-pill tv-pill-ok">{{ r.sku }}</span>{% else %}<span class="tv-pill tv-pill-warn">未映射</span>{% endif %}
-                            <div class="tv-muted">{{ r.simple_sku or '-' }}</div>
-                        </td>
-                        <td title="TikTok商品ID：{{ r.tiktok_product_id or '-' }}" style="font-family:monospace;font-size:12px">{{ r.tiktok_product_id or '-' }}</td>
-                        <td title="VV：{{ r.vv or 0 }}。同步到 Wig Ops views。">{{ r.vv or 0 }}</td>
-                        <td title="点赞 {{ r.likes_count or 0 }}；评论 {{ r.comments_count or 0 }}；分享 {{ r.shares_count or 0 }}。">👍{{ r.likes_count or 0 }}<br>💬{{ r.comments_count or 0 }}<br>↗{{ r.shares_count or 0 }}</td>
-                        <td title="商品曝光 {{ r.product_impressions or 0 }}；商品点击 {{ r.product_clicks or 0 }}；引流次数 {{ r.product_redirects or 0 }}。">{{ r.product_impressions or 0 }} / <strong>{{ r.product_clicks or 0 }}</strong><div class="tv-muted">引流 {{ r.product_redirects or 0 }}</div></td>
-                        <td title="归因SKU订单 {{ r.attributed_sku_orders or 0 }}；视频SKU订单 {{ r.video_sku_orders or 0 }}；间接SKU订单 {{ r.indirect_sku_orders or 0 }}。">{{ r.attributed_sku_orders or 0 }} / {{ r.video_sku_orders or 0 }} / {{ r.indirect_sku_orders or 0 }}</td>
-                        <td title="归因成交件数 {{ r.attributed_units or 0 }}；商品成交件数 {{ r.product_units or 0 }}；间接成交件数 {{ r.indirect_units or 0 }}。">{{ r.attributed_units or 0 }} / {{ r.product_units or 0 }} / {{ r.indirect_units or 0 }}</td>
-                        <td title="视频归因GMV ${{ '%.2f'|format(r.attributed_gmv or 0) }}；视频GMV ${{ '%.2f'|format(r.video_gmv or 0) }}；间接GMV ${{ '%.2f'|format(r.indirect_gmv or 0) }}。">${{ '%.2f'|format(r.attributed_gmv or 0) }}<div class="tv-muted">video ${{ '%.2f'|format(r.video_gmv or 0) }}</div></td>
-                        <td title="点击率 {{ r.video_ctr or 0 }}%；引流率 {{ r.redirect_rate or 0 }}%；完播率 {{ r.completion_rate or 0 }}%；CTOR {{ r.ctor_sku_orders or 0 }}%；GPM ${{ r.gpm or 0 }}。">CTR {{ r.video_ctr or 0 }}%<br>完播 {{ r.completion_rate or 0 }}%<br>GPM ${{ r.gpm or 0 }}</td>
-                        <td title="平台诊断：{{ r.platform_diagnosis or '-' }}；本地诊断：{{ r.local_diagnosis or '-' }}；复拍动作：{{ r.repeat_action or '-' }}">
-                            <span class="tv-pill {% if r.local_diagnosis in ['可复拍模板','小流量高转化'] %}tv-pill-ok{% elif r.local_diagnosis == '数据不足' %}tv-pill-info{% else %}tv-pill-risk{% endif %}">{{ r.local_diagnosis or '-' }}</span>
-                            <div class="tv-muted">{{ r.repeat_action or '-' }}</div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div id="tv-table-area">
+        {% include "_tiktok_videos_table.html" %}
         </div>
-        {% if total_pages > 1 %}
-        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px;font-size:13px">
-            {% if page > 1 %}
-            <a class="btn btn-sm" style="background:#eee;text-decoration:none" href="/tiktok-videos?page={{ page - 1 }}&mapped={{ mapped }}&search={{ search or '' }}&sort={{ sort }}&order={{ order }}" title="上一页">← 上一页</a>
-            {% else %}
-            <span class="btn btn-sm" style="background:#f5f5f5;color:#ccc;cursor:default">← 上一页</span>
-            {% endif %}
-            <span style="color:#666">第 {{ page }} / {{ total_pages }} 页 (共 {{ total }} 条)</span>
-            {% if page < total_pages %}
-            <a class="btn btn-sm" style="background:#eee;text-decoration:none" href="/tiktok-videos?page={{ page + 1 }}&mapped={{ mapped }}&search={{ search or '' }}&sort={{ sort }}&order={{ order }}" title="下一页">下一页 →</a>
-            {% else %}
-            <span class="btn btn-sm" style="background:#f5f5f5;color:#ccc;cursor:default">下一页 →</span>
-            {% endif %}
-        </div>
-        {% endif %}
-        {% else %}
-        <div class="empty" title="暂无导入数据。请先上传 TikTok Shop Video Performance List .xlsx。">暂无视频表现数据，先导入 XLSX</div>
-        {% endif %}
     </div>
 </div>
 </div>
@@ -166,6 +89,27 @@ function applyFilter(){
     if(q) url += '&search=' + encodeURIComponent(q);
     window.location.href = url;
 }
+// ── AJAX 排序/翻页 (局部刷新，不弹顶) ──
+function loadTable(url){
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    fetch(url + sep + 'partial=1')
+    .then(function(r){ return r.text(); })
+    .then(function(html){
+        document.getElementById('tv-table-area').innerHTML = html;
+        // 同步URL不刷新
+        if(window.history && window.history.replaceState){
+            window.history.replaceState(null, '', url);
+        }
+    });
+}
+// 事件委托：拦截表头和分页的链接点击
+document.getElementById('tv-table-area').addEventListener('click', function(e){
+    var a = e.target.closest('a.tv-sort-link, a.tv-page-link');
+    if(a){
+        e.preventDefault();
+        loadTable(a.href);
+    }
+});
 async function importVideos(e){
     e.preventDefault();
     var input = document.getElementById('videoFile');
@@ -180,16 +124,13 @@ async function importVideos(e){
         var r = await fetch('/api/tiktok-videos/import', {method:'POST', body:fd});
         var d = await r.json();
         if(d.status === 'ok'){
-            msg.textContent = d.message;
-            showToast(d.message, 3500);
+            msg.innerHTML = '<span style="color:#27ae60">✅ '+d.imported+' 条导入, '+d.synced+' 条同步到复盘</span>';
             setTimeout(function(){ window.location.href = '/tiktok-videos?t=' + Date.now(); }, 1000);
-        }else{
-            msg.textContent = d.message || '导入失败';
-            showToast('导入失败: ' + msg.textContent, 4000);
+        } else {
+            msg.innerHTML = '<span style="color:#e53935">❌ '+d.message+'</span>';
         }
-    }catch(err){
-        msg.textContent = err.message;
-        showToast('导入出错: ' + err.message, 4000);
+    } catch(e){
+        msg.innerHTML = '<span style="color:#e53935">出错: '+e.message+'</span>';
     }
     btn.disabled = false; btn.textContent = '导入视频表现';
 }

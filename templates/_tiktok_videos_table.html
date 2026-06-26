@@ -1,0 +1,76 @@
+{# 仅表格片段，用于AJAX局部刷新 #}
+{% if rows %}
+<div class="tv-table-wrap">
+    <table class="tv-table">
+        <thead>
+            <tr>
+                <th title="发布时间：来自 TikTok 导出字段 发布时间。">发布时间</th>
+                <th title="达人：来自 达人昵称 和 达人ID。用于判断哪个账号/达人带货效果更好。">达人</th>
+                <th title="视频：来自 视频信息 和 视频ID。视频信息通常包含口播/发布文案/标签。">视频</th>
+                <th title="商品：来自 商品 字段。">商品</th>
+                <th title="SKU映射：来自 TikTok SKUs表。">SKU</th>
+                <th title="TikTok商品ID：19位数字，用于匹配 TikTok SKUs表。">商品ID</th>
+                {% set base = '/tiktok-videos?mapped=' + (mapped or 'all') + '&search=' + (search or '') %}
+                {% macro sort_link(label, col, title) -%}
+                {% set next_order = 'asc' if (sort == col and order == 'desc') else 'desc' %}
+                {% set arrow = '▼' if (sort == col and order == 'desc') else ('▲' if sort == col else '') %}
+                <th title="{{ title }} 点击排序">
+                    <a href="{{ base }}&sort={{ col }}&order={{ next_order }}&page=1" style="text-decoration:none;color:{% if sort==col %}#e94560{% else %}#666{% endif %};white-space:nowrap" class="tv-sort-link">
+                        {{ label }}{% if arrow %} {{ arrow }}{% endif %}
+                    </a>
+                </th>
+                {%- endmacro %}
+                {{ sort_link('VV', 'vv', '视频观看量') }}
+                {{ sort_link('互动', 'likes_count', '点赞数(互动)') }}
+                {{ sort_link('曝光/点击', 'product_clicks', '商品点击次数') }}
+                {{ sort_link('订单', 'attributed_sku_orders', '归因SKU订单数') }}
+                {{ sort_link('件数', 'attributed_units', '归因成交件数') }}
+                {{ sort_link('GMV', 'attributed_gmv', '视频归因GMV($)') }}
+                <th title="效率">效率</th>
+                <th title="诊断">诊断</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr>
+                <td title="发布时间：{{ r.publish_time or '-' }}">{{ r.publish_time or '-' }}</td>
+                <td title="达人：{{ r.creator_nickname or '-' }}">{{ r.creator_nickname or '-' }}<div class="tv-muted">{{ r.creator_id or '-' }}</div></td>
+                <td class="tv-video" title="视频：{{ r.video_id or '-' }}"><strong>{{ r.video_id or '-' }}</strong><div class="tv-muted">{{ r.video_info or '-' }}</div></td>
+                <td class="tv-product" title="商品：{{ r.product_name or '-' }}">{{ r.product_name or '-' }}</td>
+                <td title="SKU：{{ r.sku or '未映射' }}">
+                    {% if r.sku %}<span class="tv-pill tv-pill-ok">{{ r.sku }}</span>{% else %}<span class="tv-pill tv-pill-warn">未映射</span>{% endif %}
+                </td>
+                <td title="TikTok商品ID：{{ r.tiktok_product_id or '-' }}" style="font-family:monospace;font-size:12px">{{ r.tiktok_product_id or '-' }}</td>
+                <td title="VV：{{ r.vv or 0 }}">{{ r.vv or 0 }}</td>
+                <td title="互动">👍{{ r.likes_count or 0 }}<br>💬{{ r.comments_count or 0 }}<br>↗{{ r.shares_count or 0 }}</td>
+                <td title="曝光/点击">{{ r.product_impressions or 0 }} / <strong>{{ r.product_clicks or 0 }}</strong></td>
+                <td title="订单">{{ r.attributed_sku_orders or 0 }} / {{ r.video_sku_orders or 0 }} / {{ r.indirect_sku_orders or 0 }}</td>
+                <td title="件数">{{ r.attributed_units or 0 }} / {{ r.product_units or 0 }} / {{ r.indirect_units or 0 }}</td>
+                <td title="GMV">${{ '%.2f'|format(r.attributed_gmv or 0) }}</td>
+                <td title="效率">CTR {{ r.video_ctr or 0 }}%<br>GPM ${{ r.gpm or 0 }}</td>
+                <td title="诊断">
+                    <span class="tv-pill {% if r.local_diagnosis in ['可复拍模板','小流量高转化'] %}tv-pill-ok{% elif r.local_diagnosis == '数据不足' %}tv-pill-info{% else %}tv-pill-risk{% endif %}">{{ r.local_diagnosis or '-' }}</span>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if total_pages > 1 %}
+<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px;font-size:13px" class="tv-pagination">
+    {% if page > 1 %}
+    <a class="btn btn-sm tv-page-link" style="background:#eee;text-decoration:none" href="/tiktok-videos?page={{ page - 1 }}&mapped={{ mapped }}&search={{ search or '' }}&sort={{ sort }}&order={{ order }}">← 上一页</a>
+    {% else %}
+    <span class="btn btn-sm" style="background:#f5f5f5;color:#ccc">← 上一页</span>
+    {% endif %}
+    <span style="color:#666">第 {{ page }} / {{ total_pages }} 页 (共 {{ total }} 条)</span>
+    {% if page < total_pages %}
+    <a class="btn btn-sm tv-page-link" style="background:#eee;text-decoration:none" href="/tiktok-videos?page={{ page + 1 }}&mapped={{ mapped }}&search={{ search or '' }}&sort={{ sort }}&order={{ order }}">下一页 →</a>
+    {% else %}
+    <span class="btn btn-sm" style="background:#f5f5f5;color:#ccc">下一页 →</span>
+    {% endif %}
+</div>
+{% endif %}
+{% else %}
+<div class="empty">暂无视频表现数据，先导入 XLSX</div>
+{% endif %}
