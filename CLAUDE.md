@@ -235,6 +235,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 | 2026-06-25 | Codex | 调整 TikTok Wig Ops 的 SKU利润/补货表头：templates/tiktok.html 将卡片内“＋ 新增”按钮改为 SKU / 简化SKU / 商品ID 搜索框，支持实时过滤当前利润补货表内SKU并显示匹配数量 |
 | 2026-06-25 | Codex | 调整 TikTok Wig Ops 的 SKU利润/补货表排期选择：templates/tiktok.html 中 SKU 勾选框默认不再选中，必须手动勾选后才参与视频排期生成 |
 | 2026-06-25 | Codex | 优化 TikTok Wig Ops 与 TikTok SKUs表联动：app.py 新增合并SKU候选/简化SKU/商品ID查找逻辑，TikTok SKUs映射保存时自动同步 tiktok_skus；templates/tiktok.html 脚本工厂支持输入完整SKU、简化SKU或TikTok商品ID并显示来源，SKU利润/补货表显示来源标签 |
+| 2026-06-26 | Claude Code | **排序/翻页AJAX化去弹顶**: Page A新增_tiktok_videos_table.html局部模板+JS事件委托拦截+replaceState; Page B新增_tiktok_videos_review.html+JS delegate; 路由partial=1返回表格片段; 渐进增强(无JS仍可用) |
 | 2026-06-26 | Claude Code | Wig Ops视频复盘加表头排序: tiktok路由加sort/order+白名单(views/product_clicks/orders/video_ctr); tiktok.html宏生成排序链接+箭头; 整表排序后分页 |
 | 2026-06-26 | Claude Code | TikTok Videos表加表头排序: 扩展白名单(VV/互动/曝光点击/订单/件数/GMV); Jinja2 sort_link宏+箭头; 翻页保留sort/order; 全列数值型无需剥格式 |
 | 2026-06-26 | Claude Code | **映射口径切simple_sku**: 导入逻辑取mapping.simple_sku不再拼TT-; 已映射=simple_sku非空,未映射=空; 回填524条(464 mapped/60 unmapped); 统计/筛选/模板全切换; 验证2074-1替代TT-2074-1; **新口径: SKU以simple_sku为准,匹配键tiktok_product_id(TEXT)** |
