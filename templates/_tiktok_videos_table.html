@@ -21,8 +21,8 @@
                 </th>
                 {%- endmacro %}
                 {{ sort_link('VV', 'vv', '视频观看量') }}
-                {{ sort_link('互动', 'likes_count', '点赞数(互动)') }}
-                {{ sort_link('曝光/点击', 'product_clicks', '商品点击次数') }}
+                {{ sort_link('互动', 'likes_count', '点赞+评论+分享总互动') }}
+                {{ sort_link('曝光/点击', 'product_clicks', '按商品点击次数排序，单元格显示曝光/点击') }}
                 {{ sort_link('订单', 'attributed_sku_orders', '归因SKU订单数') }}
                 {{ sort_link('件数', 'attributed_units', '归因成交件数') }}
                 {{ sort_link('GMV', 'attributed_gmv', '视频归因GMV($)') }}

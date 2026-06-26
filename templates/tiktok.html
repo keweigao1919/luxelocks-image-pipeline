@@ -465,6 +465,23 @@ function showVideoModal(){
 }
 function editVideoByIdx(idx){
     var v = videoData[idx]; if(!v) return;
+    editVideoRecord(v);
+}
+function getVideoFromRowButton(btn){
+    var row = btn && btn.closest ? btn.closest('tr[data-video]') : null;
+    if(!row) return null;
+    try {
+        return JSON.parse(row.getAttribute('data-video') || '{}');
+    } catch(e) {
+        return null;
+    }
+}
+function editVideoFromRow(btn){
+    var v = getVideoFromRowButton(btn);
+    if(!v || !v.id){ showToast('未找到当前行视频数据'); return; }
+    editVideoRecord(v);
+}
+function editVideoRecord(v){
     document.getElementById('videoModalTitle').textContent = '编辑视频: ' + v.sku;
     setVal('videoId', v.id); setVal('videoAccount', v.account_name); setVal('videoSku', v.sku); setVal('videoDate', v.publish_date);
     setVal('videoAngle', v.video_angle); setVal('videoPosted', v.posted ? '1' : '0'); setVal('videoViews', v.views); setVal('videoClicks', v.product_clicks);
@@ -489,21 +506,28 @@ async function saveVideo(){
 }
 async function deleteVideoByIdx(idx){
     var v = videoData[idx]; if(!v) return;
+    deleteVideoById(v.id);
+}
+async function deleteVideoById(id){
+    if(!id) return;
     if(!confirm('删除这条视频记录？')) return;
-    var r = await fetch('/api/tiktok/video/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:v.id})});
+    var r = await fetch('/api/tiktok/video/delete', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({id:id})});
     var d = await r.json();
     if(d.status === 'ok'){ location.reload(); } else { showToast('删除失败'); }
 }
 // ── AJAX 视频复盘排序 (局部刷新，不弹顶) ──
 function loadVideoReview(url){
-    var sep = url.indexOf('?') >= 0 ? '&' : '?';
-    fetch(url + sep + 'partial=1')
+    var hashIndex = url.indexOf('#');
+    var hash = hashIndex >= 0 ? url.slice(hashIndex) : '';
+    var cleanUrl = hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+    var sep = cleanUrl.indexOf('?') >= 0 ? '&' : '?';
+    fetch(cleanUrl + sep + 'partial=1')
     .then(function(r){ return r.text(); })
     .then(function(html){
         var el = document.getElementById('tt-video-review');
         if(el){ el.innerHTML = html; }
         if(window.history && window.history.replaceState){
-            window.history.replaceState(null, '', url);
+            window.history.replaceState(null, '', cleanUrl + hash);
         }
     });
 }

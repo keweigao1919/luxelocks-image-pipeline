@@ -3086,7 +3086,11 @@ async def tiktok_sku_mapping_delete(request: Request):
 _VIDEO_LIST_COLS = [
     "id","creator_nickname","video_info","video_id","publish_time",
     "product_name","tiktok_product_id","product_id","sku","simple_sku",
-    "vv","product_clicks","attributed_sku_orders","attributed_gmv",
+    "vv","likes_count","comments_count","shares_count",
+    "product_impressions","product_clicks",
+    "attributed_sku_orders","video_sku_orders","indirect_sku_orders",
+    "attributed_units","product_units","indirect_units",
+    "attributed_gmv","video_ctr","gpm",
     "platform_diagnosis","local_diagnosis","repeat_action"
 ]
 _VIDEO_LIST_SELECT = ",".join(_VIDEO_LIST_COLS)
@@ -3098,14 +3102,24 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
     try:
         per_page = 50
         # 允许排序的白名单 (数值型列)
-        allowed_sort = {"publish_time", "vv", "likes_count", "product_impressions", "product_clicks",
-                        "attributed_sku_orders", "attributed_units", "attributed_gmv", "id"}
+        sort_exprs = {
+            "publish_time": "publish_time",
+            "vv": "COALESCE(vv, 0)",
+            "likes_count": "(COALESCE(likes_count, 0) + COALESCE(comments_count, 0) + COALESCE(shares_count, 0))",
+            "product_impressions": "COALESCE(product_impressions, 0)",
+            "product_clicks": "COALESCE(product_clicks, 0)",
+            "attributed_sku_orders": "COALESCE(attributed_sku_orders, 0)",
+            "attributed_units": "COALESCE(attributed_units, 0)",
+            "attributed_gmv": "COALESCE(attributed_gmv, 0)",
+            "id": "id",
+        }
         sort = request.query_params.get("sort", "publish_time")
         order = request.query_params.get("order", "desc")
-        if sort not in allowed_sort:
+        if sort not in sort_exprs:
             sort = "publish_time"
         if order not in ("asc", "desc"):
             order = "desc"
+        sort_expr = sort_exprs[sort]
 
         where = ["1=1"]
         params = []
@@ -3131,7 +3145,7 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
 
         rows = conn.execute(
             f"SELECT {_VIDEO_LIST_SELECT} FROM tiktok_video_performance WHERE {where_clause} "
-            f"ORDER BY {sort} {order} LIMIT ? OFFSET ?",
+            f"ORDER BY {sort_expr} {order}, id DESC LIMIT ? OFFSET ?",
             params + [per_page, offset]
         ).fetchall()
 
@@ -3232,11 +3246,18 @@ async def tiktok_ops_page(request: Request, sort: str = "", order: str = "desc")
             skus.append(item)
 
         # 视频复盘排序白名单
-        video_sort_allowed = {"views", "product_clicks", "orders", "video_ctr", "publish_date"}
-        video_sort = sort if sort in video_sort_allowed else "publish_date"
+        video_sort_exprs = {
+            "views": "COALESCE(views, 0)",
+            "product_clicks": "COALESCE(product_clicks, 0)",
+            "orders": "COALESCE(orders, 0)",
+            "video_ctr": "CASE WHEN COALESCE(views, 0) > 0 THEN CAST(COALESCE(product_clicks, 0) AS REAL) / views ELSE 0 END",
+            "publish_date": "publish_date",
+        }
+        video_sort = sort if sort in video_sort_exprs else "publish_date"
         video_order = order if order in ("asc", "desc") else "desc"
+        video_sort_expr = video_sort_exprs[video_sort]
         video_rows = conn.execute(
-            f"SELECT * FROM tiktok_videos ORDER BY {video_sort} {video_order}, id DESC LIMIT 200"
+            f"SELECT * FROM tiktok_videos ORDER BY {video_sort_expr} {video_order}, id DESC LIMIT 200"
         ).fetchall()
         videos = []
         repeat_candidates = 0

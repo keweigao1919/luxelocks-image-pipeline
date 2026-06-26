@@ -248,6 +248,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 
 | 日期 | AI | 改动内容 |
 |------|-----|---------|
+| 2026-06-26 | Codex | 修复 TikTok 排序细节：app.py 补齐 TikTok Videos表 SELECT 指标字段并用白名单排序表达式，互动改按点赞+评论+分享总和排序，Wig Ops 视频复盘 CTR 改按点击/播放实时排序；templates/_tiktok_videos_review.html + templates/tiktok.html 改为行内数据编辑/按ID删除，避免 AJAX 排序后编辑错行，并修复 #videos 下 partial=1 追加位置 |
 | 2026-06-25 | Codex | 调整 TikTok Wig Ops 的 SKU利润/补货表头：templates/tiktok.html 将卡片内“＋ 新增”按钮改为 SKU / 简化SKU / 商品ID 搜索框，支持实时过滤当前利润补货表内SKU并显示匹配数量 |
 | 2026-06-25 | Codex | 调整 TikTok Wig Ops 的 SKU利润/补货表排期选择：templates/tiktok.html 中 SKU 勾选框默认不再选中，必须手动勾选后才参与视频排期生成 |
 | 2026-06-25 | Codex | 优化 TikTok Wig Ops 与 TikTok SKUs表联动：app.py 新增合并SKU候选/简化SKU/商品ID查找逻辑，TikTok SKUs映射保存时自动同步 tiktok_skus；templates/tiktok.html 脚本工厂支持输入完整SKU、简化SKU或TikTok商品ID并显示来源，SKU利润/补货表显示来源标签 |

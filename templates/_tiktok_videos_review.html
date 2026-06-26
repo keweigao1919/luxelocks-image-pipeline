@@ -29,7 +29,7 @@
         </thead>
         <tbody>
         {% for v in videos %}
-        <tr>
+        <tr data-video="{{ v|tojson|forceescape }}">
             <td title="日期：{{ v.publish_date or '-' }}">{{ v.publish_date or '-' }}{% if not v.posted %}<div class="tt-muted">待发布</div>{% endif %}</td>
             <td title="账号：{{ v.account_name or '-' }}">{{ v.account_name or '-' }}</td>
             <td title="SKU：{{ v.sku }}"><strong>{{ v.sku }}</strong></td>
@@ -41,8 +41,8 @@
             <td title="诊断：{{ v.diagnosis or '-' }}">{{ v.diagnosis or '-' }}</td>
             <td title="复拍：{{ v.repeat_action or '-' }}">{{ v.repeat_action or '-' }}</td>
             <td style="white-space:nowrap">
-                <button class="tt-compact-btn" onclick="editVideoByIdx({{ loop.index0 }})" title="编辑">编辑</button>
-                <button class="tt-compact-btn danger" onclick="deleteVideoByIdx({{ loop.index0 }})" title="删除">删</button>
+                <button class="tt-compact-btn" onclick="editVideoFromRow(this)" title="编辑">编辑</button>
+                <button class="tt-compact-btn danger" onclick="deleteVideoById({{ v.id }})" title="删除">删</button>
             </td>
         </tr>
         {% endfor %}
