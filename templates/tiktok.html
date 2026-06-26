@@ -217,10 +217,20 @@
                         <th title="数据来源：视频弹窗账号字段。用于判断不同账号是否适合不同SKU或卖点。">账号</th>
                         <th title="数据来源：视频关联SKU。用于把内容表现和SKU利润/库存连接起来。">SKU</th>
                         <th title="数据来源：视频卖点角度。用于判断颜色、发顶、背面、新手友好等哪个卖点更有效。">角度</th>
-                        <th title="数据来源：TikTok后台手动填入播放量。用于判断流量大小。">播放</th>
-                        <th title="数据来源：TikTok商品点击数据。用于计算CTR=点击/播放。">点击</th>
-                        <th title="数据来源：TikTok成交数据。用于判断转化能力。">成交</th>
-                        <th title="计算逻辑：商品点击 / 播放 × 100%。播放高但CTR低，通常要重做封面和前3秒卖点。">CTR</th>
+                        {% set base = '/tiktok' %}
+                        {% macro vsort_link(label, col, title) -%}
+                        {% set next_order = 'asc' if (video_sort == col and video_order == 'desc') else 'desc' %}
+                        {% set arrow = '▼' if (video_sort == col and video_order == 'desc') else ('▲' if video_sort == col else '') %}
+                        <th title="{{ title }} 点击排序">
+                            <a href="{{ base }}?sort={{ col }}&order={{ next_order }}#videos" style="text-decoration:none;color:{% if video_sort==col %}#e94560{% else %}#666{% endif %};white-space:nowrap">
+                                {{ label }}{% if arrow %} {{ arrow }}{% endif %}
+                            </a>
+                        </th>
+                        {%- endmacro %}
+                        {{ vsort_link('播放', 'views', '视频播放量') }}
+                        {{ vsort_link('点击', 'product_clicks', '商品点击次数') }}
+                        {{ vsort_link('成交', 'orders', '成交订单数') }}
+                        {{ vsort_link('CTR', 'video_ctr', '商品点击/播放×100%') }}
                         <th title="系统逻辑：根据播放、点击、成交自动诊断，例如播放高点击低、点击高成交低、小流量高转化、可复拍模板。">诊断</th>
                         <th title="系统建议：根据诊断给下一步动作，例如换账号复拍、重做封面、检查价格详情页、补拍自然光颜色。">复拍动作</th>
                         <th title="操作方法：编辑可补数据或改脚本；删除会移除该视频记录。">操作</th>

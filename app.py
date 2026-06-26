@@ -3216,7 +3216,7 @@ async def tiktok_videos_import(file: UploadFile = File(...)):
 
 # ────────────────────────────────────────
 @app.get("/tiktok", response_class=HTMLResponse)
-async def tiktok_ops_page(request: Request):
+async def tiktok_ops_page(request: Request, sort: str = "", order: str = "desc"):
     """TikTok 假发运营中控页面"""
     conn = get_db()
     try:
@@ -3237,8 +3237,12 @@ async def tiktok_ops_page(request: Request):
                 low_stock += 1
             skus.append(item)
 
+        # 视频复盘排序白名单
+        video_sort_allowed = {"views", "product_clicks", "orders", "video_ctr", "publish_date"}
+        video_sort = sort if sort in video_sort_allowed else "publish_date"
+        video_order = order if order in ("asc", "desc") else "desc"
         video_rows = conn.execute(
-            "SELECT * FROM tiktok_videos ORDER BY publish_date DESC, id DESC LIMIT 200"
+            f"SELECT * FROM tiktok_videos ORDER BY {video_sort} {video_order}, id DESC LIMIT 200"
         ).fetchall()
         videos = []
         repeat_candidates = 0
@@ -3276,7 +3280,9 @@ async def tiktok_ops_page(request: Request):
             stats=stats,
             today=today,
             default_accounts=", ".join(TIKTOK_DEFAULT_ACCOUNTS),
-            angle_pool=TIKTOK_ANGLE_POOL
+            angle_pool=TIKTOK_ANGLE_POOL,
+            video_sort=video_sort,
+            video_order=video_order
         )
     finally:
         conn.close()
