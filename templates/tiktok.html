@@ -207,60 +207,8 @@
             <span title="数据来源：tiktok_videos 表。用途：录入每条视频的播放、商品点击、成交和GMV，系统自动判断该视频该复拍、优化封面还是检查详情页。">视频复盘</span>
             <button class="btn btn-sm btn-green" onclick="showVideoModal()" title="新增视频计划或填入播放、点击、成交数据">＋ 新增视频</button>
         </div>
-        <div class="tt-card-body" style="padding:0">
-            {% if videos %}
-            <div class="tt-table-wrap">
-                <table class="tt-table">
-                    <thead>
-                    <tr>
-                        <th title="数据来源：视频弹窗 publish_date 字段。待发布视频由排期保存产生，已发布视频可继续填数据复盘。">日期</th>
-                        <th title="数据来源：视频弹窗账号字段。用于判断不同账号是否适合不同SKU或卖点。">账号</th>
-                        <th title="数据来源：视频关联SKU。用于把内容表现和SKU利润/库存连接起来。">SKU</th>
-                        <th title="数据来源：视频卖点角度。用于判断颜色、发顶、背面、新手友好等哪个卖点更有效。">角度</th>
-                        {% set base = '/tiktok' %}
-                        {% macro vsort_link(label, col, title) -%}
-                        {% set next_order = 'asc' if (video_sort == col and video_order == 'desc') else 'desc' %}
-                        {% set arrow = '▼' if (video_sort == col and video_order == 'desc') else ('▲' if video_sort == col else '') %}
-                        <th title="{{ title }} 点击排序">
-                            <a href="{{ base }}?sort={{ col }}&order={{ next_order }}#videos" style="text-decoration:none;color:{% if video_sort==col %}#e94560{% else %}#666{% endif %};white-space:nowrap">
-                                {{ label }}{% if arrow %} {{ arrow }}{% endif %}
-                            </a>
-                        </th>
-                        {%- endmacro %}
-                        {{ vsort_link('播放', 'views', '视频播放量') }}
-                        {{ vsort_link('点击', 'product_clicks', '商品点击次数') }}
-                        {{ vsort_link('成交', 'orders', '成交订单数') }}
-                        {{ vsort_link('CTR', 'video_ctr', '商品点击/播放×100%') }}
-                        <th title="系统逻辑：根据播放、点击、成交自动诊断，例如播放高点击低、点击高成交低、小流量高转化、可复拍模板。">诊断</th>
-                        <th title="系统建议：根据诊断给下一步动作，例如换账号复拍、重做封面、检查价格详情页、补拍自然光颜色。">复拍动作</th>
-                        <th title="操作方法：编辑可补数据或改脚本；删除会移除该视频记录。">操作</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {% for v in videos %}
-                    <tr>
-                        <td title="发布日期：{{ v.publish_date or '-' }}。状态：{% if v.posted %}已发布{% else %}待发布{% endif %}。">{{ v.publish_date or '-' }}{% if not v.posted %}<div class="tt-muted">待发布</div>{% endif %}</td>
-                        <td title="发布账号：{{ v.account_name or '-' }}。复盘时可以比较不同账号对同一SKU/卖点的表现。">{{ v.account_name or '-' }}</td>
-                        <td title="关联SKU：{{ v.sku }}。用于把视频表现和利润、库存、补货判断连接起来。"><strong>{{ v.sku }}</strong></td>
-                        <td title="视频主卖点角度：{{ v.video_angle or '-' }}。用于后续判断哪些卖点值得复拍。">{{ v.video_angle or '-' }}</td>
-                        <td title="播放量：{{ v.views or 0 }}。播放低不一定差，若成交高可能是小流量高转化，值得换账号复拍。">{{ v.views or 0 }}</td>
-                        <td title="商品点击：{{ v.product_clicks or 0 }}。用于计算CTR。点击高成交低时，要检查价格、详情页、评价和评论信任。">{{ v.product_clicks or 0 }}</td>
-                        <td title="成交订单：{{ v.orders or 0 }}。用于判断转化。成交高的视频结构优先复拍。">{{ v.orders or 0 }}</td>
-                        <td title="CTR逻辑：商品点击 / 播放 × 100%。当前 {{ v.ctr }}%。">{{ v.ctr }}%</td>
-                        <td title="自动诊断：{{ v.diagnosis or '-' }}。留空保存视频时，系统会按播放/点击/成交自动生成。">{{ v.diagnosis or '-' }}</td>
-                        <td title="复拍建议：{{ v.repeat_action or '-' }}。用于决定下一条是复拍同结构、换账号、改封面、还是检查商品页。">{{ v.repeat_action or '-' }}</td>
-                        <td style="white-space:nowrap">
-                            <button class="tt-compact-btn" onclick="editVideoByIdx({{ loop.index0 }})" title="编辑该视频计划或复盘数据">编辑</button>
-                            <button class="tt-compact-btn danger" onclick="deleteVideoByIdx({{ loop.index0 }})" title="删除该视频记录">删</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="empty" title="这里会显示视频计划和复盘记录。操作方法：可以点击 生成并保存 自动创建待发布视频，也可以点击 + 新增视频 手动录入。">暂无视频记录</div>
-            {% endif %}
+        <div class="tt-card-body" style="padding:0" id="tt-video-review">
+            {% include "_tiktok_videos_review.html" %}
         </div>
     </div>
 </div>
@@ -546,6 +494,27 @@ async function deleteVideoByIdx(idx){
     var d = await r.json();
     if(d.status === 'ok'){ location.reload(); } else { showToast('删除失败'); }
 }
+// ── AJAX 视频复盘排序 (局部刷新，不弹顶) ──
+function loadVideoReview(url){
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    fetch(url + sep + 'partial=1')
+    .then(function(r){ return r.text(); })
+    .then(function(html){
+        var el = document.getElementById('tt-video-review');
+        if(el){ el.innerHTML = html; }
+        if(window.history && window.history.replaceState){
+            window.history.replaceState(null, '', url);
+        }
+    });
+}
+document.addEventListener('click', function(e){
+    var a = e.target.closest('a.tt-sort-link');
+    if(a){
+        e.preventDefault();
+        loadVideoReview(a.href);
+    }
+});
+
 document.addEventListener('keydown', function(e){
     if(e.key === 'Escape'){ closeSkuModal(); closeVideoModal(); }
 });

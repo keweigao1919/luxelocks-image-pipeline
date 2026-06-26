@@ -3149,7 +3149,7 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
         stats_d = dict(stats)
         stats_d["mapped"] = (stats_d.get("total") or 0) - (stats_d.get("unmapped") or 0)
         stats_d["ctr"] = round((stats_d.get("clicks") or 0) / max(stats_d.get("views") or 0, 1) * 100, 2)
-        is_partial = request.query_params.get("partial") == "1"
+        is_partial = request.url.query.find("partial=1") >= 0
         tmpl = "_tiktok_videos_table.html" if is_partial else "tiktok_videos.html"
         return render_html(tmpl, request,
             rows=[dict(r) for r in rows], stats=stats_d,
@@ -3266,17 +3266,13 @@ async def tiktok_ops_page(request: Request, sort: str = "", order: str = "desc")
             "upcoming": upcoming,
             "repeat_candidates": repeat_candidates
         }
-        return render_html(
-            "tiktok.html",
-            request,
-            skus=skus,
-            videos=videos,
-            stats=stats,
-            today=today,
+        is_partial = request.url.query.find("partial=1") >= 0
+        tmpl = "_tiktok_videos_review.html" if is_partial else "tiktok.html"
+        return render_html(tmpl, request,
+            skus=skus, videos=videos, stats=stats, today=today,
             default_accounts=", ".join(TIKTOK_DEFAULT_ACCOUNTS),
             angle_pool=TIKTOK_ANGLE_POOL,
-            video_sort=video_sort,
-            video_order=video_order
+            video_sort=video_sort, video_order=video_order
         )
     finally:
         conn.close()

@@ -1,0 +1,54 @@
+{# 视频复盘表格片段，用于AJAX局部刷新 #}
+{% if videos %}
+<div class="tt-table-wrap">
+    <table class="tt-table">
+        <thead>
+        <tr>
+            <th title="视频发布日期">日期</th>
+            <th title="发布账号">账号</th>
+            <th title="关联SKU">SKU</th>
+            <th title="视频卖点角度">角度</th>
+            {% set base = '/tiktok' %}
+            {% macro vsort_link(label, col, title) -%}
+            {% set next_order = 'asc' if (video_sort == col and video_order == 'desc') else 'desc' %}
+            {% set arrow = '▼' if (video_sort == col and video_order == 'desc') else ('▲' if video_sort == col else '') %}
+            <th title="{{ title }} 点击排序">
+                <a href="{{ base }}?sort={{ col }}&order={{ next_order }}#videos" style="text-decoration:none;color:{% if video_sort==col %}#e94560{% else %}#666{% endif %};white-space:nowrap" class="tt-sort-link">
+                    {{ label }}{% if arrow %} {{ arrow }}{% endif %}
+                </a>
+            </th>
+            {%- endmacro %}
+            {{ vsort_link('播放', 'views', '视频播放量') }}
+            {{ vsort_link('点击', 'product_clicks', '商品点击次数') }}
+            {{ vsort_link('成交', 'orders', '成交订单数') }}
+            {{ vsort_link('CTR', 'video_ctr', '商品点击/播放×100%') }}
+            <th title="诊断">诊断</th>
+            <th title="复拍建议">复拍动作</th>
+            <th title="操作">操作</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for v in videos %}
+        <tr>
+            <td title="日期：{{ v.publish_date or '-' }}">{{ v.publish_date or '-' }}{% if not v.posted %}<div class="tt-muted">待发布</div>{% endif %}</td>
+            <td title="账号：{{ v.account_name or '-' }}">{{ v.account_name or '-' }}</td>
+            <td title="SKU：{{ v.sku }}"><strong>{{ v.sku }}</strong></td>
+            <td title="角度：{{ v.video_angle or '-' }}">{{ v.video_angle or '-' }}</td>
+            <td title="播放：{{ v.views or 0 }}">{{ v.views or 0 }}</td>
+            <td title="点击：{{ v.product_clicks or 0 }}">{{ v.product_clicks or 0 }}</td>
+            <td title="成交：{{ v.orders or 0 }}">{{ v.orders or 0 }}</td>
+            <td title="CTR：{{ v.ctr }}%">{{ v.ctr }}%</td>
+            <td title="诊断：{{ v.diagnosis or '-' }}">{{ v.diagnosis or '-' }}</td>
+            <td title="复拍：{{ v.repeat_action or '-' }}">{{ v.repeat_action or '-' }}</td>
+            <td style="white-space:nowrap">
+                <button class="tt-compact-btn" onclick="editVideoByIdx({{ loop.index0 }})" title="编辑">编辑</button>
+                <button class="tt-compact-btn danger" onclick="deleteVideoByIdx({{ loop.index0 }})" title="删除">删</button>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty">暂无视频记录</div>
+{% endif %}
