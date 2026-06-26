@@ -88,12 +88,22 @@
                         <th title="商品：来自 商品 字段。">商品</th>
                         <th title="SKU映射：来自 TikTok SKUs表。未映射会显示 TT-商品ID，建议补映射。">SKU</th>
                         <th title="TikTok商品ID：19位数字，来自商品字段末尾括号提取，用于匹配 TikTok SKUs表。">商品ID</th>
-                        <th title="VV：视频观看量。同步到 Wig Ops 的 views。">VV</th>
-                        <th title="互动：点赞/评论/分享。用于判断内容互动强弱。">互动</th>
-                        <th title="曝光/点击：商品曝光次数和商品点击次数。商品点击会同步到 Wig Ops 的 product_clicks。">曝光/点击</th>
-                        <th title="订单：归因SKU订单数、视频SKU订单数、间接SKU订单数。Wig Ops 默认用归因SKU订单数。">订单</th>
-                        <th title="成交件数：视频归因成交件数、视频商品成交件数、视频间接成交件数。">件数</th>
-                        <th title="GMV：视频归因GMV、视频GMV、视频间接GMV。Wig Ops 默认用视频归因GMV。">GMV</th>
+                        {% set base = '/tiktok-videos?mapped=' + (mapped or 'all') + '&search=' + (search or '') %}
+                        {% macro sort_link(label, col, title) -%}
+                        {% set next_order = 'asc' if (sort == col and order == 'desc') else 'desc' %}
+                        {% set arrow = '▼' if (sort == col and order == 'desc') else ('▲' if sort == col else '') %}
+                        <th title="{{ title }} 点击排序">
+                            <a href="{{ base }}&sort={{ col }}&order={{ next_order }}&page=1" style="text-decoration:none;color:{% if sort==col %}#e94560{% else %}#666{% endif %};white-space:nowrap">
+                                {{ label }}{% if arrow %} {{ arrow }}{% endif %}
+                            </a>
+                        </th>
+                        {%- endmacro %}
+                        {{ sort_link('VV', 'vv', '视频观看量') }}
+                        {{ sort_link('互动', 'likes_count', '点赞数(互动)') }}
+                        {{ sort_link('曝光/点击', 'product_clicks', '商品点击次数') }}
+                        {{ sort_link('订单', 'attributed_sku_orders', '归因SKU订单数') }}
+                        {{ sort_link('件数', 'attributed_units', '归因成交件数') }}
+                        {{ sort_link('GMV', 'attributed_gmv', '视频归因GMV($)') }}
                         <th title="效率：点击率、引流率、完播率、CTOR、GPM。">效率</th>
                         <th title="诊断：TikTok导出诊断 + 系统本地复盘诊断和复拍建议。">诊断</th>
                     </tr>

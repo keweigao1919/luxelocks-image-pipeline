@@ -3097,8 +3097,9 @@ async def tiktok_videos_page(request: Request, search: str = "", mapped: str = "
     conn = get_db()
     try:
         per_page = 50
-        # 允许排序的白名单
-        allowed_sort = {"publish_time", "vv", "product_clicks", "attributed_sku_orders", "attributed_gmv", "id"}
+        # 允许排序的白名单 (数值型列)
+        allowed_sort = {"publish_time", "vv", "likes_count", "product_impressions", "product_clicks",
+                        "attributed_sku_orders", "attributed_units", "attributed_gmv", "id"}
         sort = request.query_params.get("sort", "publish_time")
         order = request.query_params.get("order", "desc")
         if sort not in allowed_sort:
