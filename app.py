@@ -263,6 +263,9 @@ def init_db():
     ]:
         try: conn.execute(sql)
         except: pass
+    # TikTok JOIN索引
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tiktok_sku_map_pid ON tiktok_sku_mapping(tiktok_product_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_tvp_pid ON tiktok_video_performance(tiktok_product_id)")
     # 采购资源信息池
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS procurement_resources (
