@@ -139,11 +139,27 @@ await oms_call("/v1/integratedInventory/pageOpen", {"page":1,"pageSize":50})
 await oms_call("/v1/outboundOrder/pageList", {...})
 ```
 
+### split_tiktok_product(raw_product) → (product_name, product_id)
+```python
+def split_tiktok_product(raw_product):
+    text = str(raw_product or "").strip()
+    match = re.search(r"\((\d{8,})\)\s*$", text)
+    if not match:
+        return text, ""
+    return text[:match.start()].strip(), match.group(1)
+# "商品名(1732277674835415824)" → ("商品名", "1732277674835415824")
+```
+
 ### 模板
 ```python
 render_html("模板.html", request, key=val)
 # 用 {% for %} 构建 JS 数组，禁止内联 {{ r|tojson|safe }} 在 HTML 属性
+# 表格交互统一走 partial=1 局部刷新，不整页跳转
 ```
+
+### ⚠️ 运维提醒
+**改完 app.py 必须重启 uvicorn 服务，否则跑旧代码。**
+出现"改了没效果"先确认已重启，不要急着怀疑逻辑/重写代码。
 
 ---
 
@@ -235,6 +251,7 @@ base.html = 侧边栏+标签页+Toast+syncOrders/syncOMSTracking/lookupTracking
 | 2026-06-25 | Codex | 调整 TikTok Wig Ops 的 SKU利润/补货表头：templates/tiktok.html 将卡片内“＋ 新增”按钮改为 SKU / 简化SKU / 商品ID 搜索框，支持实时过滤当前利润补货表内SKU并显示匹配数量 |
 | 2026-06-25 | Codex | 调整 TikTok Wig Ops 的 SKU利润/补货表排期选择：templates/tiktok.html 中 SKU 勾选框默认不再选中，必须手动勾选后才参与视频排期生成 |
 | 2026-06-25 | Codex | 优化 TikTok Wig Ops 与 TikTok SKUs表联动：app.py 新增合并SKU候选/简化SKU/商品ID查找逻辑，TikTok SKUs映射保存时自动同步 tiktok_skus；templates/tiktok.html 脚本工厂支持输入完整SKU、简化SKU或TikTok商品ID并显示来源，SKU利润/补货表显示来源标签 |
+| 2026-06-26 | Claude Code | 收尾清理: 导入改用AJAX局部刷新不再整页跳转; 删除products.html搜索Date.now()时间戳; CLAUDE.md补登记split_tiktok_product+partial=1约定+运维提醒(改py必重启) |
 | 2026-06-26 | Claude Code | **排序/翻页AJAX化去弹顶**: Page A新增_tiktok_videos_table.html局部模板+JS事件委托拦截+replaceState; Page B新增_tiktok_videos_review.html+JS delegate; 路由partial=1返回表格片段; 渐进增强(无JS仍可用) |
 | 2026-06-26 | Claude Code | Wig Ops视频复盘加表头排序: tiktok路由加sort/order+白名单(views/product_clicks/orders/video_ctr); tiktok.html宏生成排序链接+箭头; 整表排序后分页 |
 | 2026-06-26 | Claude Code | TikTok Videos表加表头排序: 扩展白名单(VV/互动/曝光点击/订单/件数/GMV); Jinja2 sort_link宏+箭头; 翻页保留sort/order; 全列数值型无需剥格式 |
