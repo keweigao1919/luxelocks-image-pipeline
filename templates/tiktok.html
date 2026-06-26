@@ -590,19 +590,29 @@ async function deleteVideoById(id){
     if(d.status === 'ok'){ location.reload(); } else { showToast('删除失败'); }
 }
 // ── AJAX 视频复盘排序 (局部刷新，不弹顶) ──
+var _videoReviewReqId = 0;  // 竞态保护计数器
 function loadVideoReview(url){
     var hashIndex = url.indexOf('#');
     var hash = hashIndex >= 0 ? url.slice(hashIndex) : '';
     var cleanUrl = hashIndex >= 0 ? url.slice(0, hashIndex) : url;
     var sep = cleanUrl.indexOf('?') >= 0 ? '&' : '?';
+    var el = document.getElementById('tt-video-review');
+    var oldHtml = el ? el.innerHTML : '';  // 保留旧内容,失败时恢复
+    var reqId = ++_videoReviewReqId;
     fetch(cleanUrl + sep + 'partial=1')
-    .then(function(r){ return r.text(); })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
     .then(function(html){
-        var el = document.getElementById('tt-video-review');
+        // 竞态:丢弃过期响应
+        if(reqId !== _videoReviewReqId) return;
         if(el){ el.innerHTML = html; }
         if(window.history && window.history.replaceState){
             window.history.replaceState(null, '', cleanUrl + hash);
         }
+    })
+    .catch(function(e){
+        // 竞态:丢弃过期响应
+        if(reqId !== _videoReviewReqId) return;
+        if(el){ el.innerHTML = '<div style="text-align:center;padding:20px;color:#e53935">⚠️ 加载失败,请重试<br><span style="font-size:11px;color:#999">'+e.message+'</span><br><button class="btn btn-sm" style="margin-top:8px" onclick="loadVideoReview(\''+cleanUrl+hash+'\')">重试</button></div>'; }
     });
 }
 document.addEventListener('click', function(e){
