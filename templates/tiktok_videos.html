@@ -125,7 +125,7 @@ async function importVideos(e){
         var d = await r.json();
         if(d.status === 'ok'){
             msg.innerHTML = '<span style="color:#27ae60">✅ '+d.imported+' 条导入, '+d.synced+' 条同步到复盘</span>';
-            setTimeout(function(){ window.location.href = '/tiktok-videos?t=' + Date.now(); }, 1000);
+            setTimeout(function(){ loadTable('/tiktok-videos?mapped=all&search='); }, 1000);
         } else {
             msg.innerHTML = '<span style="color:#e53935">❌ '+d.message+'</span>';
         }

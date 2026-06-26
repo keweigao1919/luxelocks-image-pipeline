@@ -197,7 +197,7 @@ var currentUploadSku=''; var currentUploadPid='';
 function uploadImage(sku, pid){ currentUploadSku=sku; currentUploadPid=pid; document.getElementById('uploadSkuLabel').textContent='SKU: '+sku; document.getElementById('uploadModal').style.display='flex'; document.getElementById('imageUrlInput').value=''; document.getElementById('imageUrlInput').focus(); }
 function closeUpload(){ document.getElementById('uploadModal').style.display='none'; }
 async function saveImage(){ var url=document.getElementById('imageUrlInput').value.trim(); if(!url)return; showToast('保存中...',3000); try{ var r=await fetch('/api/product/image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sku:currentUploadSku,platform_product_id:currentUploadPid,image_url:url})}); var d=await r.json(); if(d.status==='ok'){closeUpload();location.reload();}else{showToast('失败:'+d.message);} }catch(e){ showToast('出错:'+e.message); } }
-function doSearch(){ var q=document.getElementById('skuSearch').value.trim(); var s=document.getElementById('statusFilter').value; window.location.href='/products?search='+encodeURIComponent(q)+'&status='+encodeURIComponent(s)+'&t='+Date.now(); }
+function doSearch(){ var q=document.getElementById('skuSearch').value.trim(); var s=document.getElementById('statusFilter').value; window.location.href='/products?search='+encodeURIComponent(q)+'&status='+encodeURIComponent(s); }
 function doFilter(){ var q=document.getElementById('skuSearch').value.trim(); var s=document.getElementById('statusFilter').value; window.location.href='/products?search='+encodeURIComponent(q)+'&status='+encodeURIComponent(s); }
 // 素材预览（毫秒级，加载缓存树后直接过滤）
 async function showMedia(sku){
