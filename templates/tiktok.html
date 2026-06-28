@@ -16,7 +16,7 @@
 .tt-search-inline input:focus { outline:none; border-color:#3498db; }
 .tt-search-count { color:#888; font-size:12px; font-weight:500; white-space:nowrap; }
 .tt-table-wrap { overflow-x:auto; }
-.tt-table th { white-space:nowrap; }
+.tt-table th { white-space:nowrap; position:sticky; top:0; z-index:1; background:#fafafa; }
 .tt-table td { vertical-align:middle; }
 .tt-muted { color:#888; font-size:12px; }
 .tt-pill { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap; }
@@ -65,7 +65,7 @@
 <div class="stats col4">
     <div class="stat-card" title="数据来源：tiktok_skus + tiktok_sku_mapping 合并后的SKU数。含义：SKU利润/补货和脚本工厂可使用的SKU总数。"><div class="label">SKU</div><div class="value">{{ stats.total_skus }}</div></div>
     <div class="stat-card" title="计算逻辑：净利润 >= 6美元的SKU计为可主推。净利润 = 售价 - 产品成本 - 尾程 - 平台费 - 广告费 - 退款损失×退货率。"><div class="label">可主推</div><div class="value" style="color:#27ae60">{{ stats.main_push }}</div></div>
-    <div class="stat-card" title="计算逻辑：净利润 < 3美元的SKU计为高风险。用途：提醒不要轻易加大投放或大批量补货。"><div class="label">高风险</div><div class="value" style="color:#e53935">{{ stats.high_risk }}</div></div>
+    <div class="stat-card" title="计算逻辑：净利润 < 3美元的SKU计为高风险。用途：提醒不要轻易加大投放或大批量补货。"><div class="label">高风险</div><div class="value" style="color:#e53935">{{ stats.high_risk }}</div>{% if stats.total_skus > 0 and stats.main_push == 0 and stats.high_risk == stats.total_skus %}<div style="font-size:10px;color:#e53935;margin-top:4px">⚠️ 成本未填,无法计算利润</div>{% endif %}</div>
     <div class="stat-card" title="数据来源：tiktok_video_tasks 表。计算逻辑：status=planned 且发布日期大于等于今天的任务数。用途：查看还有多少排期任务未发布。"><div class="label">待发布</div><div class="value" style="color:#3498db">{{ stats.upcoming }}</div></div>
 </div>
 
@@ -74,7 +74,7 @@
         <div class="tt-card-header">
             <span title="数据来源：tiktok_skus 运营表 + TikTok SKUs表。用途：如果SKU先在 TikTok SKUs表维护映射，会自动出现在这里；再补库存、日销、状态后，就能用于排期和利润补货判断。">SKU利润 / 补货</span>
             <div class="tt-search-inline" title="搜索范围：当前 SKU利润 / 补货 表内的完整SKU、简化SKU、TikTok商品ID、产品名、颜色和长度。">
-                <input id="skuProfitSearch" type="search" placeholder="SKU / 简化SKU / 商品ID" autocomplete="off" title="输入完整SKU、简化SKU或TikTok商品ID，实时过滤下方 SKU利润 / 补货 表。">
+                <input id="skuProfitSearch" type="search" placeholder="SKU / 简化SKU / 商品ID" autocomplete="off" oninput="filterSkuProfitRows()" title="输入完整SKU、简化SKU或TikTok商品ID，实时过滤下方 SKU利润 / 补货 表。">
                 <span id="skuProfitSearchCount" class="tt-search-count" title="当前显示数量 / 表内SKU总数">{{ skus|length }}/{{ skus|length }}</span>
             </div>
         </div>
@@ -432,7 +432,7 @@ function updateScriptSkuHint(){
         hint.style.color = '#888';
     }
 }
-function quickScript(sku){ setVal('scriptSku', sku); updateScriptSkuHint(); setVal('scriptAngle', '整体效果'); generateScript(); }
+function quickScript(sku){ setVal('scriptSku', sku); updateScriptSkuHint(); setVal('scriptAngle', '整体效果'); generateScript(); showToast('已填入: '+sku, 2000); var el=document.getElementById('scriptSku'); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.transition='none'; el.style.boxShadow='0 0 0 3px #e94560'; setTimeout(function(){ el.style.transition='box-shadow 0.5s'; el.style.boxShadow=''; }, 1200); } }
 function metricText(ref){
     var m = (ref && ref.metrics) || {};
     return '播放 ' + (m.views || 0) + ' / 点击 ' + (m.clicks || 0) + ' / CTR ' + (m.ctr || 0) + '% / 订单 ' + (m.orders || 0) + ' / GMV $' + (m.gmv || 0);
