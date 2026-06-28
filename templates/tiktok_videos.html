@@ -12,7 +12,7 @@
 .tv-upload input[type=file] { padding:7px; border:1px solid #ddd; border-radius:6px; background:white; font-size:13px; }
 .tv-filter { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
 .tv-filter select { width:130px; padding:7px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; }
-.tv-table-wrap { overflow:auto; max-height:620px; }
+.tv-table-wrap { overflow-x:auto; overflow-y:auto; max-height:620px; }
 .tv-table th { white-space:nowrap; position:sticky; top:0; z-index:1; }
 .tv-table td { vertical-align:top; }
 .tv-video { max-width:320px; min-width:220px; line-height:1.35; }
@@ -85,8 +85,15 @@
 function applyFilter(){
     var q = document.getElementById('searchBox').value.trim();
     var mapped = document.getElementById('mappedFilter').value;
+    // 保留当前排序/页码
+    var params = new URLSearchParams(window.location.search);
+    var sort = params.get('sort') || '';
+    var order = params.get('order') || '';
+    var page = params.get('page') || '';
     var url = '/tiktok-videos?mapped=' + encodeURIComponent(mapped);
     if(q) url += '&search=' + encodeURIComponent(q);
+    if(sort){ url += '&sort=' + sort + '&order=' + order; }
+    if(page) url += '&page=' + page;
     window.location.href = url;
 }
 // ── AJAX 排序/翻页 (局部刷新，不弹顶) ──

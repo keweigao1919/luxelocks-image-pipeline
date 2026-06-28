@@ -68,6 +68,8 @@ async function addTracking() {
                 <span class="badge badge-pending">待处理</span>
                 {% elif order.status == 'cancelled' %}
                 <span class="badge badge-cancelled">已取消</span>
+                {% elif order.status == 'refunded' %}
+                <span class="badge" style="background:#f3e5f5;color:#7b1fa2">已退款</span>
                 {% else %}
                 <span class="badge badge-pending">{{ order.status }}</span>
                 {% endif %}
