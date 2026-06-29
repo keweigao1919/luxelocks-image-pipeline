@@ -2,38 +2,58 @@
 {% block title %}订单列表{% endblock %}
 {% block content %}
 
+{# 状态映射宏 #}
+{% macro status_badge(s) -%}
+{% if s == 'refunded' %}<span class="status-badge status-refunded">已退款</span>
+{% elif s in ('shipped') %}<span class="status-badge status-shipped">已发货</span>
+{% elif s in ('paid','authorized') %}<span class="status-badge status-paid">已付款</span>
+{% elif s in ('pending') %}<span class="status-badge status-pending">待处理</span>
+{% elif s == 'cancelled' %}<span class="status-badge status-cancelled">已取消</span>
+{% else %}<span class="status-badge status-other">{{ s }}</span>
+{% endif %}
+{%- endmacro %}
+
+{# 状态筛选 tab #}
+{% macro status_tab(label, value, current, title) -%}
+{% set is_on = (current == value) or (not current and value == 'all') %}
+{% set colors = {'pending':'#e67e22','paid':'#27ae60','shipped':'#2196f3','cancelled':'#888','refunded':'#e53935'} %}
+{% set c = colors.get(value, '#999') %}
+<a href="/orders{% if value != 'all' %}?status={{ value }}{% endif %}" class="status-tab{% if is_on %} status-tab-on{% endif %}" style="{% if is_on %}background:{{ c }};color:#fff;border-color:{{ c }}{% endif %}" title="{{ title }}">{{ label }}</a>
+{%- endmacro %}
+
 <div class="card">
     <div class="card-header">
         订单列表
         <div>
             <input class="search-box" id="searchInput" placeholder="搜索订单号 / 客户 / 运单号..."
-                   value="{{ search or '' }}" title="输入订单号、客户名或运单号，按回车搜索">
+                   value="{{ search or '' }}" title="输入订单号、客户名或运单号，按回车搜索" style="width:200px">
             <button class="btn btn-primary" onclick="search()" title="根据输入的关键词在订单表模糊搜索订单号/客户/运单号">搜索</button>
             <button class="btn btn-sm" style="background:#f39c12;color:#fff" onclick="syncOmsTracking()" id="syncOmsBtn" title="数据来源：领星OMS出库单 → 匹配海外仓发货订单 | 拉取最近30天OMS物流单号，更新到对应订单的运单号和物流商字段">📦 同步OMS运单号</button>
             {% if status_filter %}
-            <a href="/orders" class="btn" style="background:#eee" title="移除状态筛选条件，显示全部订单">清除筛选</a>
+            <a href="/orders" class="btn" style="background:#eee" title="移除状态筛选条件，显示全部订单">清除</a>
             {% endif %}
         </div>
     </div>
-    <div class="card-body">
-        <div style="margin-bottom:12px">
-            <a href="/orders" class="badge badge-paid" style="text-decoration:none;cursor:pointer" title="显示所有状态的订单">全部</a>
-            <a href="/orders?status=pending" class="badge badge-pending" style="text-decoration:none;cursor:pointer;margin-left:4px" title="仅显示待处理订单 | 订单已创建但未付款">待处理</a>
-            <a href="/orders?status=paid" class="badge badge-paid" style="text-decoration:none;cursor:pointer;margin-left:4px" title="仅显示已付款订单 | 客户已付款待发货">已付款</a>
-            <a href="/orders?status=shipped" class="badge badge-shipped" style="text-decoration:none;cursor:pointer;margin-left:4px" title="仅显示已发货订单 | 运单号已录入">已发货</a>
-            <a href="/orders?status=cancelled" class="badge badge-cancelled" style="text-decoration:none;cursor:pointer;margin-left:4px" title="仅显示已取消订单 | 订单已取消不处理">已取消</a>
-            <a href="/orders?status=refunded" class="badge" style="text-decoration:none;cursor:pointer;margin-left:4px;background:#f3e5f5;color:#7b1fa2" title="仅显示已退款订单">已退款</a>
+    <div class="card-body" style="padding-bottom:0">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+            {{ status_tab('全部', 'all', status_filter, '显示所有状态的订单') }}
+            {{ status_tab('待处理', 'pending', status_filter, '订单已创建但未付款') }}
+            {{ status_tab('已付款', 'paid', status_filter, '客户已付款待发货') }}
+            {{ status_tab('已发货', 'shipped', status_filter, '运单号已录入已发货') }}
+            {{ status_tab('已取消', 'cancelled', status_filter, '订单已取消不处理') }}
+            {{ status_tab('已退款', 'refunded', status_filter, '已退款订单(异常需关注)') }}
         </div>
 
         {% if orders %}
-        <table>
+        <div style="overflow-x:auto">
+        <table style="border-radius:8px;overflow:hidden">
             <thead>
-                <tr>
-                    <th title="运输类型：海外仓发货=跨境仓有库存，国内直发=跨境仓无库存。订单同步时固化，不随后续库存变化">运输类型</th>
+                <tr style="background:#f5f6fa">
+                    <th title="运输类型：海外仓发货=跨境仓有库存，国内直发=跨境仓无库存。订单同步时固化">运输</th>
                     <th title="平台订单号，点击行查看详情">订单号</th>
                     <th>平台</th>
                     <th>客户</th>
-                    <th>金额</th>
+                    <th style="text-align:right">金额</th>
                     <th>状态</th>
                     <th title="物流运单号，来源于OMS同步或手动录入">运单号</th>
                     <th title="物流商名称，如云途物流、AS-YWE等">物流商</th>
@@ -42,45 +62,56 @@
             </thead>
             <tbody>
                 {% for o in orders %}
-                <tr onclick="location.href='/order/{{ o.platform_order_id }}'" style="cursor:pointer" title="点击查看订单详情、商品明细、采购信息">
+                <tr onclick="location.href='/order/{{ o.platform_order_id }}'" style="cursor:pointer" title="点击查看订单详情、商品明细、采购信息" class="order-row">
                     <td>
                         {% if o.shipping_type == '海外仓发货' %}
-                        <span class="badge badge-shipped" title="该订单产品在跨境仓有库存，从海外仓发货">海外仓发货</span>
+                        <span class="status-badge status-shipped">海外仓</span>
                         {% elif o.shipping_type == '国内直发' %}
-                        <span class="badge badge-pending" title="该订单产品跨境仓无库存，从国内直发">国内直发</span>
+                        <span class="status-badge" style="background:#eee;color:#888">国内直发</span>
                         {% else %}
-                        <span class="badge badge-pending">{{ o.shipping_type or '国内直发' }}</span>
+                        <span class="status-badge status-other">{{ o.shipping_type or '国内直发' }}</span>
                         {% endif %}
                     </td>
                     <td><strong>{{ o.order_number or o.platform_order_id[:8] }}</strong></td>
                     <td>{{ o.platform }}</td>
-                    <td>{{ o.customer_name or '-' }}</td>
-                    <td>{{ o.currency or 'USD' }} {{ o.total_price }}</td>
-                    <td>
-                        {% if o.status == 'shipped' %}
-                        <span class="badge badge-shipped">已发货</span>
-                        {% elif o.status in ('paid','authorized') %}
-                        <span class="badge badge-paid">已付款</span>
-                        {% elif o.status in ('pending') %}
-                        <span class="badge badge-pending">待处理</span>
-                        {% elif o.status == 'cancelled' %}
-                        <span class="badge badge-cancelled">已取消</span>
-                        {% else %}
-                        <span class="badge badge-pending">{{ o.status }}</span>
-                        {% endif %}
+                    <td>{{ o.customer_name or '—' }}</td>
+                    <td style="text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap"><small>{{ o.currency or 'USD' }}</small> {{ '%.2f'|format(o.total_price) }}</td>
+                    <td>{{ status_badge(o.status) }}</td>
+                    <td style="font-family:monospace;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                        {% if o.tracking_number %}
+                        <span class="tracking-copy" onclick="event.stopPropagation();copyTracking('{{ o.tracking_number }}', this)" title="点击复制运单号">{{ o.tracking_number }}</span>
+                        {% else %}<span style="color:#ccc">—</span>{% endif %}
                     </td>
-                    <td>{{ o.tracking_number or '-' }}</td>
-                    <td>{{ o.tracking_company or '-' }}</td>
-                    <td style="color:#999;font-size:12px">{{ o.created_at | fmttime }}</td>
+                    <td>{{ o.tracking_company or '—' }}</td>
+                    <td style="color:#999;font-size:12px;white-space:nowrap">{{ o.created_at | fmttime }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
+        </div>
         {% else %}
         <div class="empty">暂无订单</div>
         {% endif %}
     </div>
 </div>
+
+<style>
+.status-tab { display:inline-flex; align-items:center; padding:4px 14px; border-radius:20px; font-size:12px; font-weight:500; text-decoration:none; border:1.5px solid #d0d0d0; color:#666; background:#fff; transition:0.15s; cursor:pointer; }
+.status-tab:hover { border-color:#aaa; }
+.status-tab-on { font-weight:600; }
+.status-badge { display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap; }
+.status-refunded { background:#fce4ec; color:#e53935; }
+.status-shipped { background:#e3f2fd; color:#2196f3; }
+.status-paid { background:#e8f5e9; color:#27ae60; }
+.status-pending { background:#fff3e0; color:#e67e22; }
+.status-cancelled { background:#eee; color:#888; }
+.status-other { background:#f5f5f5; color:#999; }
+.order-row:hover { background:#f8f8f8 !important; }
+.tracking-copy { cursor:pointer; }
+.tracking-copy:hover { background:#e3f2fd; border-radius:3px; }
+.tracking-copy::after { content:' 📋'; font-size:10px; opacity:0; transition:0.15s; }
+.tracking-copy:hover::after { opacity:1; }
+</style>
 
 <script>
 function search() {
@@ -91,7 +122,6 @@ function search() {
 document.getElementById('searchInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') search();
 });
-
 async function syncOmsTracking() {
     var btn = document.getElementById('syncOmsBtn');
     btn.disabled = true;
@@ -110,6 +140,11 @@ async function syncOmsTracking() {
     }
     btn.disabled = false;
     btn.textContent = '📦 同步OMS运单号';
+}
+function copyTracking(tn, el) {
+    navigator.clipboard.writeText(tn).then(function(){
+        el.style.background='#e8f5e9'; setTimeout(function(){ el.style.background=''; }, 600);
+    });
 }
 </script>
 
