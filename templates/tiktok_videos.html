@@ -2,6 +2,13 @@
 {% block title %}TikTok Videos表{% endblock %}
 {% block content %}
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+#tvPage { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+#tvPage .tv-table td { font-variant-numeric: tabular-nums; }
+#tvPage .stat-card .value { font-variant-numeric: tabular-nums; }
+#tvPage .tv-table tbody tr:hover { background:#f8f8f8; }
+/* 在售缺货/标红优先级高于hover */
+#tvPage .tv-table tbody tr[style*="background"]:hover { background:#ffe8e8 !important; }
 .tv-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px; }
 .tv-sub { color:#888; font-size:12px; margin-top:4px; }
 .tv-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
