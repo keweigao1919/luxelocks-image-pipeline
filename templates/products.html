@@ -60,7 +60,7 @@
 <th style="color:#e67e22;white-space:nowrap">Veloura<br>在途
     <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=veloura_transit&order=asc" style="text-decoration:none;color:{% if sort=='veloura_transit' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
     <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=veloura_transit&order=desc" style="text-decoration:none;color:{% if sort=='veloura_transit' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
-</th><th>操作</th></tr></thead><tbody>
+</th><th style="position:sticky;right:0;background:#fafafa;z-index:1">操作</th></tr></thead><tbody>
             {% for p in products %}
             <tr>
                 <td style="font-size:11px;color:#888">{{ p.sku or '-' }}</td>
@@ -71,8 +71,8 @@
                     {% endif %}
                     <button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#eee;display:{% if p.image_url %}none{% else %}inline-block{% endif %}" onclick="uploadImage('{{ p.sku }}', '{{ p.platform_product_id }}')">+图</button>
                 </td>
-                <td>{{ p.title }}</td>
-                <td>{{ p.variant_title or '-' }}</td>
+                <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ p.title }}">{{ p.title }}</td>
+                <td style="font-size:11px;color:#999">{% if p.variant_title and p.variant_title != 'Default Title' %}{{ p.variant_title }}{% else %}-{% endif %}</td>
                 <td>${{ p.price }}</td>
                 <td>
                     {% if p.product_status == 'active' %}
@@ -91,7 +91,7 @@
                 <td style="color:#8e44ad;font-weight:600">{{ p.luxe_available or 0 }}</td>
                 <td style="color:#8e44ad;font-weight:600">{{ p.luxe_transit or 0 }}</td>
                 <td style="color:#e67e22;font-weight:600">{{ p.veloura_available or 0 }}</td>
-                <td style="color:#e67e22;font-weight:600">{{ p.veloura_transit or 0 }}</td><td><a href="/procurement?import={{ p.simple_sku }}" <a href="/procurement?import={{ p.simple_sku }}" class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#f39c12;color:#fff;text-decoration:none;white-space:nowrap;margin-right:2px" title="跳转到采购资源信息池 | 自动带入该产品简化SKU和图片">🛒采购</a><button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#3498db;color:#fff;border:none;cursor:pointer;white-space:nowrap" title="查看本地素材 | 毫秒级搜索本地文件" onclick="event.stopPropagation();showMedia(&quot;{{ p.simple_sku }}&quot;)">📷素材</button></td>
+                <td style="color:#e67e22;font-weight:600">{{ p.veloura_transit or 0 }}</td><td style="white-space:nowrap;position:sticky;right:0;background:white"><a href="/procurement?import={{ p.simple_sku }}" class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#f39c12;color:#fff;text-decoration:none;white-space:nowrap;margin-right:2px" title="跳转到采购资源信息池 | 自动带入该产品简化SKU和图片">🛒采购</a><button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#3498db;color:#fff;border:none;cursor:pointer;white-space:nowrap" title="查看本地素材 | 毫秒级搜索本地文件" onclick="event.stopPropagation();showMedia(&quot;{{ p.simple_sku }}&quot;)">📷素材</button></td>
             </tr>
             {% endfor %}
             </tbody>
