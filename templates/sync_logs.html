@@ -17,22 +17,29 @@
 </div>
 
 <script>
-// 拦截翻页链接，局部刷新
+// AJAX翻页 (竞态保护+容错)
+var _syncLogReqId = 0;
 document.getElementById('log-table-area').addEventListener('click', function(e){
     var a = e.target.closest('a.log-page-link');
-    if(a){
-        e.preventDefault();
-        var url = a.href;
-        var sep = url.indexOf('?') >= 0 ? '&' : '?';
-        fetch(url + sep + 'partial=1')
-        .then(function(r){ return r.text(); })
-        .then(function(html){
-            document.getElementById('log-table-area').innerHTML = html;
-            if(window.history && window.history.replaceState){
-                window.history.replaceState(null, '', url);
-            }
-        });
-    }
+    if(!a) return;
+    e.preventDefault();
+    var url = a.href;
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    var el = document.getElementById('log-table-area');
+    var reqId = ++_syncLogReqId;
+    fetch(url + sep + 'partial=1')
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
+    .then(function(html){
+        if(reqId !== _syncLogReqId) return;
+        if(el) el.innerHTML = html;
+        if(window.history && window.history.replaceState){
+            window.history.replaceState(null, '', url);
+        }
+    })
+    .catch(function(e){
+        if(reqId !== _syncLogReqId) return;
+        if(el) el.innerHTML = '<div style="text-align:center;padding:20px;color:#e53935">加载失败,请重试</div>';
+    });
 });
 </script>
 {% endblock %}
