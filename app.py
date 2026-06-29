@@ -2616,6 +2616,7 @@ async def product_list(request: Request, search: str = None, status: str = None,
             "luxe_transit": sum(p["luxe_transit"] or 0 for p in result),
             "veloura_available": sum(p["veloura_available"] or 0 for p in result),
             "veloura_transit": sum(p["veloura_transit"] or 0 for p in result),
+            "out_of_stock": sum(1 for p in result if p.get("product_status") == "active" and (p.get("inventory_quantity") or 0) == 0),
         }
 
         resp = render_html("products.html", request, products=result, totals=totals, search=search, sort=sort, order=order, status=status)

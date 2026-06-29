@@ -62,7 +62,7 @@
     <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=veloura_transit&order=desc" style="text-decoration:none;color:{% if sort=='veloura_transit' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
 </th><th style="position:sticky;right:0;background:#fafafa;z-index:1">操作</th></tr></thead><tbody>
             {% for p in products %}
-            <tr>
+            <tr {% if p.product_status == 'active' and p.inventory_quantity == 0 %}style="background:#fff5f5"{% endif %}>
                 <td style="font-size:11px;color:#888">{{ p.sku or '-' }}</td>
                 <td><strong style="color:#e94560">{{ p.simple_sku or '-' }}</strong></td>
                 <td>
@@ -98,14 +98,14 @@
             {% if totals %}
             <tfoot>
             <tr style="background:#f5f6fa;font-weight:700;border-top:2px solid #333">
-                <td colspan="7" style="text-align:right;font-size:14px;color:#333">总计</td>
-                <td style="font-size:14px;{% if totals.shopify < 100 %}#e53935{% endif %}">{{ totals.shopify }}</td>
-                <td style="color:#2196f3;font-size:14px">{{ totals.cross_available }}</td>
-                <td style="color:#ff9800;font-size:14px">{{ totals.cross_transit }}</td>
-                <td style="color:#8e44ad;font-size:14px">{{ totals.luxe_available }}</td>
-                <td style="color:#8e44ad;font-size:14px">{{ totals.luxe_transit }}</td>
-                <td style="color:#e67e22;font-size:14px">{{ totals.veloura_available }}</td>
-                <td style="color:#e67e22;font-size:14px">{{ totals.veloura_transit }}</td>
+                <td colspan="7" style="text-align:right;font-size:13px;color:#333">总计{% if totals.out_of_stock > 0 %}<br><span style="color:#e53935;font-size:11px">⚠️ 在售缺货 {{ totals.out_of_stock }} SKU</span>{% endif %}</td>
+                <td style="font-size:13px;{% if totals.shopify < 100 %}#e53935{% endif %}" title="Shopify库存总计">{{ totals.shopify }}</td>
+                <td style="color:#2196f3;font-size:13px" title="跨境在线库存可用">{{ totals.cross_available }}</td>
+                <td style="color:#ff9800;font-size:13px" title="跨境在线库存在途">{{ totals.cross_transit }}</td>
+                <td style="color:#8e44ad;font-size:13px" title="LuxeLocks可用">{{ totals.luxe_available }}</td>
+                <td style="color:#8e44ad;font-size:13px" title="LuxeLocks在途">{{ totals.luxe_transit }}</td>
+                <td style="color:#e67e22;font-size:13px" title="Veloura可用">{{ totals.veloura_available }}</td>
+                <td style="color:#e67e22;font-size:13px" title="Veloura在途">{{ totals.veloura_transit }}</td>
                 <td></td>
                 <td></td>
             </tr>
@@ -180,7 +180,8 @@ async function syncProducts(){
     }catch(e){ showToast('失败: '+e.message); }
 }
 async function clearProducts(){
-    if(!confirm('确认清空所有本地产品数据？\n\n不会影响 Shopify 上的产品。\n清空后请点「同步产品」重新拉取。')) return;
+    var answer = prompt('⚠️ 高危操作\n\n将删除本地全部 '+{{ products|length if products else 0 }}+' 条产品数据。\nOMS库存数据(oms_available_qty/oms_transit_qty)无法从Shopify恢复，需重新同步领星。\n\n● 不影响 Shopify 线上产品\n● 同步产品/OMS后可恢复\n\n输入"确认"后执行:');
+    if(answer !== '确认'){ showToast('已取消,未删除任何数据'); return; }
     showToast('清空中...',3000);
     try{
         var r=await fetch('/api/products/clear',{method:'POST'});
