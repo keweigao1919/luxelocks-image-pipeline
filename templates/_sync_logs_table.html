@@ -1,0 +1,50 @@
+{# 同步日志表格片段，用于AJAX局部刷新 #}
+{% if logs %}
+<div class="log-table-wrap">
+    <table class="log-table">
+        <thead>
+            <tr>
+                <th>时间</th>
+                <th>类型</th>
+                <th>状态</th>
+                <th>详情</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for l in logs %}
+            <tr>
+                <td style="white-space:nowrap;font-size:12px;color:#666">{{ l.created_at[:19] }}</td>
+                <td style="white-space:nowrap;font-size:13px">{{ labels.get(l.action, l.action) }}</td>
+                <td>
+                    {% if l.status == 'success' %}
+                    <span class="log-ok">成功</span>
+                    {% elif l.status in ('failed','error') %}
+                    <span class="log-fail">失败</span>
+                    {% else %}
+                    <span class="log-partial">{{ l.status }}</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:12px;color:#555;max-width:400px;word-break:break-word">{{ l.detail or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if total_pages > 1 %}
+<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px;font-size:13px">
+    {% if page > 1 %}
+    <a class="btn btn-sm log-page-link" style="background:#eee;text-decoration:none" href="/sync-logs?page={{ page - 1 }}">← 上一页</a>
+    {% else %}
+    <span class="btn btn-sm" style="background:#f5f5f5;color:#ccc">← 上一页</span>
+    {% endif %}
+    <span style="color:#666">第 {{ page }} / {{ total_pages }} 页 (共 {{ total }} 条)</span>
+    {% if page < total_pages %}
+    <a class="btn btn-sm log-page-link" style="background:#eee;text-decoration:none" href="/sync-logs?page={{ page + 1 }}">下一页 →</a>
+    {% else %}
+    <span class="btn btn-sm" style="background:#f5f5f5;color:#ccc">下一页 →</span>
+    {% endif %}
+</div>
+{% endif %}
+{% else %}
+<div class="empty">暂无同步日志</div>
+{% endif %}

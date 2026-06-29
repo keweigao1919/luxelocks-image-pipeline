@@ -5259,6 +5259,47 @@ async def health():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
 
+# ────────────────────────────────────────
+# 同步日志查看
+# ────────────────────────────────────────
+_ACTION_LABELS = {
+    "sync_cross_border": "同步领星OMS",
+    "push_shopify_inventory": "推送Shopify库存",
+    "manual_sync_products": "同步产品",
+    "manual_sync": "手动同步",
+    "sync_tracking": "同步运单",
+    "sync_inventory": "同步库存",
+    "sync_tracking_overseas": "同步海外仓运单",
+    "import_xlsx": "导入XLSX",
+    "add_tracking": "录入运单",
+    "manual_clear_products": "清空产品",
+}
+
+@app.get("/sync-logs", response_class=HTMLResponse)
+async def sync_logs_page(request: Request, page: int = 1):
+    """只读同步日志查看页"""
+    conn = get_db()
+    try:
+        per_page = 50
+        total = conn.execute("SELECT COUNT(*) FROM sync_log").fetchone()[0]
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        offset = max(0, min(page, total_pages) - 1) * per_page
+
+        rows = conn.execute(
+            "SELECT * FROM sync_log ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (per_page, offset)
+        ).fetchall()
+
+        is_partial = request.url.query.find("partial=1") >= 0
+        tmpl = "_sync_logs_table.html" if is_partial else "sync_logs.html"
+        return render_html(tmpl, request,
+            logs=[dict(r) for r in rows],
+            labels=_ACTION_LABELS,
+            page=page, total_pages=total_pages, total=total)
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     import uvicorn
     import logging

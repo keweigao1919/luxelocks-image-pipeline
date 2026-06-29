@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}同步日志{% endblock %}
+{% block content %}
+<style>
+.log-table-wrap { overflow-x:auto; }
+.log-table th { white-space:nowrap; position:sticky; top:0; z-index:1; background:#fafafa; }
+.log-ok { color:#27ae60; font-weight:600; }
+.log-fail { color:#e53935; font-weight:600; }
+.log-partial { color:#e67e22; font-weight:600; }
+</style>
+
+<h2 style="margin-bottom:4px">📋 同步日志</h2>
+<p style="font-size:12px;color:#999;margin-bottom:16px">记录每次同步操作的时间、类型、状态和结果 (共 {{ total }} 条)</p>
+
+<div id="log-table-area">
+{% include "_sync_logs_table.html" %}
+</div>
+
+<script>
+// 拦截翻页链接，局部刷新
+document.getElementById('log-table-area').addEventListener('click', function(e){
+    var a = e.target.closest('a.log-page-link');
+    if(a){
+        e.preventDefault();
+        var url = a.href;
+        var sep = url.indexOf('?') >= 0 ? '&' : '?';
+        fetch(url + sep + 'partial=1')
+        .then(function(r){ return r.text(); })
+        .then(function(html){
+            document.getElementById('log-table-area').innerHTML = html;
+            if(window.history && window.history.replaceState){
+                window.history.replaceState(null, '', url);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

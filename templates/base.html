@@ -102,6 +102,7 @@
         <a href="#" onclick="openTab(event,'/sku-mapping','🔗','SKU映射')" title="数据来源：手动配置 | 管理不同系统间简化SKU映射关系（Shopify↔跨境↔LuxeLocks↔Veloura）"><span class="icon">🔗</span> SKU映射</a>
         <a href="#" onclick="syncOrders()" title="数据来源：Shopify API → 本地数据库 | 拉取最新50个订单，更新订单状态和商品明细"><span class="icon">🔄</span> 同步Shopify</a>
         <a href="#" onclick="syncOMSTracking()" title="数据来源：领星OMS → 本地运单号 | 拉取OMS出库单物流信息，匹配订单更新运单号和物流商"><span class="icon">📮</span> OMS同步物流</a>
+        <a href="#" onclick="openTab(event,'/sync-logs','📋','同步日志')" title="只读查看 | 记录每次同步操作的时间、类型和结果(成功/失败/条数)"><span class="icon">📋</span> 同步日志</a>
     </div>
     <div class="main">
         <div class="header">
@@ -226,6 +227,7 @@
                 '/tiktok': {icon:'🎥', title:'TikTok运营'},
                 '/tiktok-videos': {icon:'📹', title:'TikTok Videos表'},
                 '/tiktok-sku': {icon:'🎵', title:'TikTok SKU管理'},
+            '/sync-logs': {icon:'📋', title:'同步日志'},
                 '/reminders': {icon:'⏰', title:'重要事项'},
                 '/reminders': {icon:'📬', title:'邮件提醒'},
                 '/sku-mapping': {icon:'🔗', title:'SKU映射'}
