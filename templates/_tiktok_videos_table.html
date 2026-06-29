@@ -35,10 +35,13 @@
             <tr>
                 <td title="发布时间：{{ r.publish_time or '-' }}">{{ r.publish_time or '-' }}</td>
                 <td title="达人：{{ r.creator_nickname or '-' }}">{{ r.creator_nickname or '-' }}<div class="tv-muted">{{ r.creator_id or '-' }}</div></td>
-                <td class="tv-video" title="视频：{{ r.video_id or '-' }}"><strong>{{ r.video_id or '-' }}</strong><div class="tv-muted">{{ r.video_info or '-' }}</div></td>
+                <td class="tv-video" title="视频ID：{{ r.video_id or '-' }}">
+                    {% if r.video_id %}<a href="https://www.tiktok.com/@user6306361560661/video/{{ r.video_id }}" target="_blank" style="color:#333;text-decoration:none" title="在TikTok打开此视频"><strong>{{ r.video_id }}</strong></a>{% else %}<strong>-</strong>{% endif %}
+                    <div class="tv-muted">{% if r.video_info %}{{ r.video_info }}{% else %}<span style="color:#bbb">无文案</span>{% endif %}</div>
+                </td>
                 <td class="tv-product" title="商品：{{ r.product_name or '-' }}">{{ r.product_name or '-' }}</td>
                 <td title="SKU：{{ r.sku or '未映射' }}">
-                    {% if r.sku %}<span class="tv-pill tv-pill-ok">{{ r.sku }}</span>{% else %}<span class="tv-pill tv-pill-warn">未映射</span>{% endif %}
+                    {% if r.sku %}<span class="tv-pill tv-pill-ok">{{ r.sku }}</span>{% else %}<span class="tv-pill tv-pill-warn">未映射</span> <a href="/tiktok-sku?q={{ r.tiktok_product_id }}" class="btn btn-sm" style="font-size:10px;padding:1px 6px;background:#f39c12;color:#fff;text-decoration:none" title="打开SKU映射页并预填该商品ID" target="_blank">去映射</a>{% endif %}
                 </td>
                 <td title="TikTok商品ID：{{ r.tiktok_product_id or '-' }}" style="font-family:monospace;font-size:12px">{{ r.tiktok_product_id or '-' }}</td>
                 <td title="VV：{{ r.vv or 0 }}">{{ r.vv or 0 }}</td>
