@@ -76,7 +76,7 @@ async function addTracking() {
             </td></tr>
             <tr><td style="color:#888">运单号</td><td>{{ order.tracking_number or '未发货' }}</td></tr>
             <tr><td style="color:#888">物流商</td><td>{{ order.tracking_company or '-' }}</td></tr>
-            <tr><td style="color:#888">时间</td><td style="color:#999;font-size:12px">{{ order.created_at }}</td></tr>
+            <tr><td style="color:#888">时间</td><td style="color:#999;font-size:12px">{{ order.created_at | fmttime }}</td></tr>
         </table>
     </div>
 </div>

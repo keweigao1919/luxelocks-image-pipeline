@@ -1,8 +1,8 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}看板{% endblock %}
 {% block content %}
 
-<div class="stats">
+<div class="stats col4">
     <div class="stat-card">
         <div class="label">今日订单</div>
         <div class="value today">{{ stats.today }}</div>
@@ -10,12 +10,13 @@
     <div class="stat-card">
         <div class="label">待处理</div>
         <div class="value pending">{{ stats.pending }}</div>
+        <div style="font-size:10px;color:#999;margin-top:2px">pending+paid+authorized</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="cursor:pointer" onclick="location.href='/orders?status=shipped'" title="点击查看已发货订单列表">
         <div class="label">已发货</div>
         <div class="value shipped">{{ stats.shipped }}</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" style="cursor:pointer" onclick="location.href='/orders'" title="点击查看全部订单列表">
         <div class="label">总计订单</div>
         <div class="value total">{{ stats.total }}</div>
     </div>
@@ -61,7 +62,7 @@
                         {% endif %}
                     </td>
                     <td>{{ o.tracking_number or '-' }}</td>
-                    <td style="color:#999; font-size:12px">{{ o.created_at[:16] }}</td>
+                    <td style="color:#999; font-size:12px">{{ o.created_at | fmttime }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -82,7 +83,7 @@
 {% if low_stock %}
 <div class="card">
     <div class="card-header">
-        ⚠️ 低库存告警
+        🛑 在售缺货 (active+库存=0, 与产品页同口径)
     </div>
     <div class="card-body">
         <table>
@@ -91,10 +92,35 @@
             </thead>
             <tbody>
                 {% for p in low_stock %}
+                <tr style="background:#fff5f5">
+                    <td><strong>{{ p.sku }}</strong></td>
+                    <td>{{ p.title }}{% if p.variant_title and p.variant_title != 'Default Title' %} {{ p.variant_title }}{% endif %}</td>
+                    <td style="color:#e53935;font-weight:600">0</td>
+                    <td>${{ p.price }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if low_warning %}
+<div class="card">
+    <div class="card-header">
+        ⚠️ 低库存提醒 (active+库存<10, 建议补货)
+    </div>
+    <div class="card-body">
+        <table>
+            <thead>
+                <tr><th>SKU</th><th>品名</th><th>库存</th><th>价格</th></tr>
+            </thead>
+            <tbody>
+                {% for p in low_warning %}
                 <tr>
                     <td><strong>{{ p.sku }}</strong></td>
-                    <td>{{ p.title }} {{ p.variant_title or '' }}</td>
-                    <td style="color:#e53935;font-weight:600">{{ p.inventory_quantity }}</td>
+                    <td>{{ p.title }}{% if p.variant_title and p.variant_title != 'Default Title' %} {{ p.variant_title }}{% endif %}</td>
+                    <td style="color:#e67e22;font-weight:600">{{ p.inventory_quantity }}</td>
                     <td>${{ p.price }}</td>
                 </tr>
                 {% endfor %}

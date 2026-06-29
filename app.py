@@ -1798,6 +1798,14 @@ app = FastAPI(
 
 jinja_env = Jinja2Templates(directory=str(BASE_DIR / "templates")).env
 
+def _fmt_time(ts):
+    """ISO时间 → 短格式: 2026-06-08T22:04 → 06-08 22:04"""
+    if ts and len(str(ts)) >= 16:
+        s = str(ts)
+        return f"{s[5:7]}-{s[8:10]} {s[11:16]}"
+    return str(ts) if ts else '-'
+jinja_env.filters["fmttime"] = _fmt_time
+
 def render_html(name: str, request: Request, **context) -> HTMLResponse:
     """渲染模板（绕过 Jinja2 缓存 bug）"""
     tmpl = jinja_env.get_template(name)
@@ -1926,9 +1934,16 @@ async def dashboard(request: Request):
             SELECT * FROM orders ORDER BY created_at DESC LIMIT 50
         """).fetchall()
 
-        # 低库存产品
+        # 低库存: 与产品页统一口径 — active(在售)且 inventory==0
         low_stock = conn.execute("""
-            SELECT * FROM products WHERE inventory_quantity < 10
+            SELECT * FROM products
+            WHERE product_status = 'active' AND inventory_quantity = 0
+            ORDER BY inventory_quantity ASC LIMIT 20
+        """).fetchall()
+        # 低库存 <10 提醒（提前补货档）
+        low_warning = conn.execute("""
+            SELECT * FROM products
+            WHERE product_status = 'active' AND inventory_quantity > 0 AND inventory_quantity < 10
             ORDER BY inventory_quantity ASC LIMIT 20
         """).fetchall()
 
@@ -1940,7 +1955,8 @@ async def dashboard(request: Request):
                 "today": today
             },
             orders=[dict(o) for o in orders],
-            low_stock=[dict(p) for p in low_stock]
+            low_stock=[dict(p) for p in low_stock],
+            low_warning=[dict(p) for p in low_warning]
         )
     finally:
         conn.close()

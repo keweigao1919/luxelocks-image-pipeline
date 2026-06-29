@@ -71,7 +71,7 @@
                     </td>
                     <td>{{ o.tracking_number or '-' }}</td>
                     <td>{{ o.tracking_company or '-' }}</td>
-                    <td style="color:#999;font-size:12px">{{ o.created_at[:16] }}</td>
+                    <td style="color:#999;font-size:12px">{{ o.created_at | fmttime }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
