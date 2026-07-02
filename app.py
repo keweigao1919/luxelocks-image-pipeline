@@ -2625,14 +2625,13 @@ async def product_list(request: Request, search: str = None, status: str = None,
 
         # 计算总计
         totals = {
-            "shopify": sum(p["inventory_quantity"] or 0 for p in result),
             "cross_available": sum(p["cross_available"] or 0 for p in result),
             "cross_transit": sum(p["cross_transit"] or 0 for p in result),
             "luxe_available": sum(p["luxe_available"] or 0 for p in result),
             "luxe_transit": sum(p["luxe_transit"] or 0 for p in result),
             "veloura_available": sum(p["veloura_available"] or 0 for p in result),
             "veloura_transit": sum(p["veloura_transit"] or 0 for p in result),
-            "out_of_stock": sum(1 for p in result if p.get("product_status") == "active" and (p.get("inventory_quantity") or 0) == 0),
+            "out_of_stock": sum(1 for p in result if p.get("product_status") == "active" and (p.get("cross_available") or 0) == 0),
         }
 
         resp = render_html("products.html", request, products=result, totals=totals, search=search, sort=sort, order=order, status=status)
@@ -2989,104 +2988,6 @@ async def sync_cross_border_from_oms():
         conn.commit()
         return {"status": "ok", "synced": len(aggregated), "total_rows": len(all_records),
                 "updated": updated, "inserted": inserted, "manual_kept": max(0, manual_count)}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-    finally:
-        conn.close()
-
-
-@app.post("/api/inventory/push-to-shopify")
-async def push_inventory_to_shopify():
-    """将跨境在线库存可用同步到 Shopify（仅更新有库存的SKU，不回写0）"""
-    conn = get_db()
-    try:
-        global _shopify_location_id
-        if not _shopify_location_id:
-            loc_result = await shopify.get("/locations.json")
-            locs = loc_result.get("locations", [])
-            if locs:
-                _shopify_location_id = locs[0]["id"]
-        if not _shopify_location_id:
-            return {"status": "error", "message": "无法获取Shopify仓库位置"}
-
-        # SKU映射
-        mappings = conn.execute(
-            "SELECT shopify_simple_sku, cross_border_simple_sku FROM sku_mapping"
-        ).fetchall()
-        map_cross = {}
-        for m in mappings:
-            if m["cross_border_simple_sku"]:
-                map_cross[m["shopify_simple_sku"]] = m["cross_border_simple_sku"]
-
-        # 查询跨境在线库存（按简化SKU汇总，含avail=0）
-        cross_inv = {}  # simplified_sku → available qty
-        for row in conn.execute(
-            "SELECT reference_code, SUM(available_inventory) as total FROM warehouse_inventory"
-            " WHERE warehouse_name IN ('CrossBorder','NewProducts')"
-            " GROUP BY reference_code"
-        ).fetchall():
-            ref_simple = simplify_sku(row["reference_code"])
-            if ref_simple:
-                cross_inv[ref_simple] = cross_inv.get(ref_simple, 0) + (row["total"] or 0)
-
-        # 收集所有OMS管理的简化SKU（有warehouse_inventory记录的，无论库存多少）
-        oms_managed_skus = set(cross_inv.keys())
-
-        # 查询所有有variant_id的产品
-        products = conn.execute(
-            "SELECT sku, inventory_item_id, variant_id FROM products"
-            " WHERE inventory_item_id IS NOT NULL AND inventory_item_id != ''"
-        ).fetchall()
-
-        updated = 0
-        untracked = 0
-        skipped = 0
-        errors = 0
-        error_skus = []
-        for p in products:
-            inv_id = p["inventory_item_id"]
-            if not inv_id:
-                continue
-            ss = simplify_sku(p["sku"])
-            cross_key = map_cross.get(ss, ss)
-
-            # 只处理OMS管理的SKU
-            if cross_key not in oms_managed_skus:
-                skipped += 1
-                continue
-
-            avail = cross_inv.get(cross_key, 0)
-            vid = int(p["variant_id"]) if p["variant_id"] and p["variant_id"].isdigit() else None
-
-            try:
-                if avail > 0:
-                    # 有库存 → 跟踪 + 设置库存数
-                    await shopify.set_inventory(int(inv_id), _shopify_location_id, int(avail), vid)
-                    conn.execute("UPDATE products SET inventory_quantity=? WHERE sku=?", (int(avail), p["sku"]))
-                    updated += 1
-                else:
-                    # 库存耗尽 → 取消跟踪，继续卖（未跟踪库存）
-                    if vid:
-                        await shopify.untrack_variant(vid)
-                    untracked += 1
-                    conn.execute("UPDATE products SET inventory_quantity=0 WHERE sku=?", (p["sku"],))
-
-                if (updated + untracked) % 10 == 0:
-                    await asyncio.sleep(0.5)
-            except Exception as e:
-                errors += 1
-                error_skus.append(f"{ss}({str(e)[:50]})")
-
-        conn.execute(
-            "INSERT INTO sync_log (platform, action, status, detail) VALUES (?, ?, ?, ?)",
-            ("oms", "push_shopify_inventory", "success",
-             f"Shopify push: {updated} updated, {untracked} untracked, {skipped} skipped, {errors} errors")
-        )
-        conn.commit()
-        err_detail = ", 失败: " + "; ".join(error_skus) if error_skus else ""
-        return {"status": "ok", "updated": updated, "untracked": untracked,
-                "skipped": skipped, "errors": errors,
-                "message": f"Shopify同步: 跟踪更新 {updated} SKU, 转为未跟踪 {untracked} SKU (库存耗尽继续卖), 跳过 {skipped}, 失败 {errors}" + err_detail}
     except Exception as e:
         return {"status": "error", "message": str(e)}
     finally:

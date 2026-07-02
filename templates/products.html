@@ -15,7 +15,6 @@
     {% if search or status %}<a href="/products" class="btn btn-sm" style="background:#eee">清除</a>{% endif %}
     <div style="flex:1"></div>
     <button class="btn btn-sm" style="background:#ff9800;color:#fff" onclick="syncOMS()" title="数据来源：领星OMS integratedInventory API | 同步跨境仓可用库存+在途到产品列表">📡 同步领星OMS</button>
-    <button class="btn btn-sm" style="background:#27ae60;color:#fff" onclick="pushToShopify()" id="pushShopifyBtn" title="将跨境在线库存可用同步到Shopify库存 | 仅更新有跨境库存的SKU，无库存的跳过">📤 同步Shopify库存</button>
     <button class="btn btn-primary btn-sm" onclick="syncProducts()" title="数据来源：Shopify Product API | 拉取最新产品、变体SKU、价格、库存到本地">同步产品</button>
     <button class="btn btn-sm" style="background:#e53935;color:#fff" onclick="clearProducts()" title="清空本地产品表所有数据 | 操作不可逆，清空后需重新同步">清空</button>
 </div>
@@ -29,13 +28,7 @@
         {% if products %}
         <table>
             <thead><tr>
-<th>SKU</th><th>简化SKU</th><th>图片</th><th>品名</th><th>规格</th><th>价格</th><th>状态</th>
-<th style="white-space:nowrap">
-    Shopify库存
-    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=shopify&order=asc" style="text-decoration:none;color:{% if sort=='shopify' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
-    <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=shopify&order=desc" style="text-decoration:none;color:{% if sort=='shopify' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
-</th>
-<th style="white-space:nowrap">
+<th>SKU</th><th>简化SKU</th><th>图片</th><th>品名</th><th>规格</th><th>价格</th><th>状态</th><th style="white-space:nowrap">
     跨境在线库存可用
     <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=cross_avail&order=asc" style="text-decoration:none;color:{% if sort=='cross_avail' and order=='asc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">升</a>
     <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=cross_avail&order=desc" style="text-decoration:none;color:{% if sort=='cross_avail' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
@@ -62,7 +55,7 @@
     <a href="/products?search={{ search or '' }}&status={{ status or '' }}&sort=veloura_transit&order=desc" style="text-decoration:none;color:{% if sort=='veloura_transit' and order=='desc' %}#e94560{% else %}#ccc{% endif %};font-size:10px">降</a>
 </th><th style="position:sticky;right:0;background:#fafafa;z-index:1">操作</th></tr></thead><tbody>
             {% for p in products %}
-            <tr {% if p.product_status == 'active' and p.inventory_quantity == 0 %}style="background:#fff5f5"{% endif %}>
+            <tr {% if p.product_status == 'active' and (p.cross_available == 0 or p.cross_available == null or p.cross_available is none) %}style="background:#fff5f5"{% endif %}>
                 <td style="font-size:11px;color:#888">{{ p.sku or '-' }}</td>
                 <td><strong style="color:#e94560">{{ p.simple_sku or '-' }}</strong></td>
                 <td>
@@ -99,7 +92,6 @@
             <tfoot>
             <tr style="background:#f5f6fa;font-weight:700;border-top:2px solid #333">
                 <td colspan="7" style="text-align:right;font-size:13px;color:#333">总计{% if totals.out_of_stock > 0 %}<br><span style="color:#e53935;font-size:11px">⚠️ 在售缺货 {{ totals.out_of_stock }} SKU</span>{% endif %}</td>
-                <td style="font-size:13px;{% if totals.shopify < 100 %}#e53935{% endif %}" title="Shopify库存总计">{{ totals.shopify }}</td>
                 <td style="color:#2196f3;font-size:13px" title="跨境在线库存可用">{{ totals.cross_available }}</td>
                 <td style="color:#ff9800;font-size:13px" title="跨境在线库存在途">{{ totals.cross_transit }}</td>
                 <td style="color:#8e44ad;font-size:13px" title="LuxeLocks可用">{{ totals.luxe_available }}</td>
@@ -145,18 +137,6 @@
     </div>
 </div>
 <script>
-async function pushToShopify(){
-    var btn=document.getElementById('pushShopifyBtn');
-    btn.disabled=true; btn.textContent='⏳ 同步中...';
-    showToast('正在将跨境库存同步到Shopify...',10000);
-    try{
-        var r=await fetch('/api/inventory/push-to-shopify',{method:'POST'});
-        var d=await r.json();
-        if(d.status==='ok'){ showToast(d.message); }
-        else{ showToast('失败: '+d.message); }
-    }catch(e){ showToast('出错: '+e.message); }
-    btn.disabled=false; btn.textContent='📤 同步Shopify库存';
-}
 async function syncOMS(){
     showToast('从领星OMS同步跨境库存...',5000);
     try{
