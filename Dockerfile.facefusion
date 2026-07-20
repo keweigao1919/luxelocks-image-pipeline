@@ -61,6 +61,9 @@ assert ort.__version__ == "1.17.1", "onnxruntime-gpu must be pinned to 1.17.1"
 assert int(numpy.__version__.split(".")[0]) < 2, "numpy must stay <2 for ORT 1.17.1"
 PY
 
+COPY scripts/facefusion_download_required_models.py /usr/local/bin/facefusion-download-required-models
+RUN chmod +x /usr/local/bin/facefusion-download-required-models
+
 # Stable absolute-path wrapper so SSH commands never depend on `cd`.
 RUN printf '%s\n' \
     '#!/usr/bin/env bash' \
@@ -80,7 +83,7 @@ RUN printf '%s\n' \
     'cd /workspace/facefusion' \
     'echo "[facefusion-download-models] cwd=$(pwd)" | tee "$LOG_PATH"' \
     'echo "[facefusion-download-models] started=$(date -Iseconds)" | tee -a "$LOG_PATH"' \
-    'python facefusion.py force-download --download-scope full --download-providers github huggingface --log-level info 2>&1 | tee -a "$LOG_PATH"' \
+    'python /usr/local/bin/facefusion-download-required-models 2>&1 | tee -a "$LOG_PATH"' \
     'MODEL_COUNT="$(find /workspace/facefusion/.assets/models -type f | wc -l)"' \
     'echo "[facefusion-download-models] model_file_count=${MODEL_COUNT}" | tee -a "$LOG_PATH"' \
     'test "${MODEL_COUNT}" -gt 0' \
@@ -91,8 +94,12 @@ RUN printf '%s\n' \
 RUN cd /tmp \
     && facefusion headless-run --help | grep -q -- '--face-swapper-model'
 
-# GPU validation only at Pod runtime (CI has no GPU)
-# Models download on first pod run (avoid CI network timeouts)
+# Bake the required FaceFusion models into the image. This moves the slow and
+# failure-prone network step out of paid RunPod time.
+RUN facefusion-download-required-models
+
+# GPU validation only at Pod runtime (CI has no GPU).
+# FaceFusion model files are baked during image build above.
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

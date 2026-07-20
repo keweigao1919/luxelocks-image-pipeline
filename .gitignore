@@ -8,4 +8,4 @@ __pycache__/
 .img_cache/
 venv/
 .venv/
-
+.tmp_facefusion_r9/

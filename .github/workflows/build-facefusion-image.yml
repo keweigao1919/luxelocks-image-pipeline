@@ -6,6 +6,7 @@ on:
     paths:
       - Dockerfile.facefusion
       - entrypoint.sh
+      - scripts/facefusion_download_required_models.py
       - .github/workflows/build-facefusion-image.yml
 
 env:
