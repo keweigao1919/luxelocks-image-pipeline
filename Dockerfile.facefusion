@@ -1,7 +1,7 @@
 # veloura-facefusion-cu126-cudnn9
 # FaceFusion GPU image for RunPod Secure A6000.
 # No API keys, product images, face library, garment library, or private data.
-FROM nvidia/cuda:12.6.0-cudnn9-runtime-ubuntu22.04
+FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
 
 LABEL org.opencontainers.image.title="veloura-facefusion-cu126-cudnn9"
 LABEL org.opencontainers.image.description="FaceFusion GPU face swap for LuxeLocks pipeline"
