@@ -6,38 +6,29 @@ FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
 LABEL org.opencontainers.image.title="veloura-facefusion-cu126-cudnn9"
 LABEL org.opencontainers.image.description="FaceFusion GPU face swap for LuxeLocks pipeline"
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PIP_NO_CACHE_DIR=1
+ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1
 
+# System deps + SSH for RunPod
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl ffmpeg git libgl1 libglib2.0-0 \
-    openssh-server python3 python3-pip python3-venv wget \
+    curl ffmpeg git libgl1 libglib2.0-0 openssh-server python3 python3-pip wget \
     && mkdir -p /var/run/sshd \
     && sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config \
-    && sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Python packages (PyTorch base image already has torch/torchvision)
 RUN python3 -m pip install --upgrade pip setuptools wheel
 RUN python3 -m pip install numpy onnxruntime-gpu opencv-python-headless pillow requests
 
-# Print available providers (GPU check only valid at runtime, CI has no GPU)
-RUN python3 -c "import onnxruntime as ort; print('ORT:', ort.__version__, ort.get_available_providers())"
-
+# FaceFusion
 WORKDIR /workspace
 RUN git clone https://github.com/facefusion/facefusion.git --depth 1
 WORKDIR /workspace/facefusion
-RUN python3 -m pip install -r requirements.txt && python3 install.py cuda --skip-conda
-
-# FaceFusion install.py upgrades onnxruntime-gpu to an incompatible version.
-# Re-pin to the version that ships with the PyTorch base image (cuDNN9-compatible).
+RUN python3 -m pip install -r requirements.txt
+RUN python3 install.py cuda --skip-conda
+# Re-pin onnxruntime-gpu after install.py overwrites it
 RUN python3 -m pip install --force-reinstall onnxruntime-gpu
 
-# Verify onnxruntime still loads (GPU check only valid at runtime)
-RUN python3 -c "import onnxruntime as ort; print('ORT:', ort.__version__, ort.get_available_providers()); print('OK')"
-
-# Pre-download all FaceFusion models
+# Pre-download all FaceFusion models (GPU NOT needed for download, models are data)
 RUN python3 facefusion.py force-download
 
 COPY entrypoint.sh /entrypoint.sh
