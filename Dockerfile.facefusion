@@ -51,6 +51,24 @@ RUN python install.py cuda --skip-conda
 # ORT 1.17.1 is the last version compatible with cuDNN 8 (PyTorch 2.1.0 base).
 RUN python -m pip install --force-reinstall onnxruntime-gpu==1.17.1 "numpy<2"
 
+RUN python - <<'PY'
+import numpy
+import onnxruntime as ort
+print("ORT:", ort.__version__)
+print("NumPy:", numpy.__version__)
+print("ORT providers at build:", ort.get_available_providers())
+assert ort.__version__ == "1.17.1", "onnxruntime-gpu must be pinned to 1.17.1"
+assert int(numpy.__version__.split(".")[0]) < 2, "numpy must stay <2 for ORT 1.17.1"
+PY
+
+# Stable absolute-path wrapper so SSH commands never depend on `cd`.
+RUN printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'set -euo pipefail' \
+    'exec python /workspace/facefusion/facefusion.py "$@"' \
+    > /usr/local/bin/facefusion \
+    && chmod +x /usr/local/bin/facefusion
+
 # GPU validation only at Pod runtime (CI has no GPU)
 # Models download on first pod run (avoid CI network timeouts)
 COPY entrypoint.sh /entrypoint.sh

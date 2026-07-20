@@ -71,9 +71,20 @@ AllowTcpForwarding yes
 GatewayPorts yes
 EOF
 
-# Run sshd as a daemon. If startup fails, fail the container early.
-/usr/sbin/sshd -e
-log "sshd started"
+# Match RunPod's published minimal-pod golden path: generate host keys, then use
+# the distro service wrapper. Fall back to direct sshd only if service is absent.
+if command -v service >/dev/null 2>&1; then
+    service ssh start || service ssh restart
+else
+    /usr/sbin/sshd -e
+fi
+
+if pgrep -x sshd >/dev/null 2>&1; then
+    log "sshd started"
+else
+    log "ERROR: sshd did not start"
+    exit 1
+fi
 
 if command -v python >/dev/null 2>&1; then
     log "python=$(python --version 2>&1)"
