@@ -28,9 +28,7 @@ RUN python3 install.py cuda --skip-conda
 # Re-pin onnxruntime-gpu after install.py overwrites it
 RUN python3 -m pip install --force-reinstall onnxruntime-gpu
 
-# Pre-download all FaceFusion models (GPU NOT needed for download, models are data)
-RUN python3 facefusion.py force-download
-
+# Models download on first pod run (avoid CI network timeouts)
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
