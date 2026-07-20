@@ -41,16 +41,7 @@ RUN python install.py cuda --skip-conda
 # Re-pin onnxruntime-gpu after install.py overwrites it
 RUN python -m pip install --force-reinstall onnxruntime-gpu
 
-RUN python - <<'PY'
-import sys
-import typing
-import onnxruntime as ort
-print("Python:", sys.version)
-print("typing.NotRequired:", typing.NotRequired)
-print("ORT:", ort.__version__)
-print("ORT providers visible at build:", ort.get_available_providers())
-PY
-
+# GPU validation only at Pod runtime (CI has no GPU)
 # Models download on first pod run (avoid CI network timeouts)
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
