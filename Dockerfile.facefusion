@@ -6,27 +6,50 @@ FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
 LABEL org.opencontainers.image.title="veloura-facefusion-cu126-cudnn9"
 LABEL org.opencontainers.image.description="FaceFusion GPU face swap for LuxeLocks pipeline"
 
-ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PATH=/opt/conda/envs/facefusion/bin:/opt/conda/bin:$PATH
 
 # System deps + SSH for RunPod
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ffmpeg git libgl1 libglib2.0-0 openssh-server python3 python3-pip wget \
+    curl ffmpeg git libgl1 libglib2.0-0 openssh-server wget \
     && mkdir -p /var/run/sshd \
     && sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Python packages (PyTorch base image already has torch/torchvision)
-RUN python3 -m pip install --upgrade pip setuptools wheel
-RUN python3 -m pip install numpy onnxruntime-gpu opencv-python-headless pillow requests
+# FaceFusion currently expects modern typing symbols from Python 3.11+.
+# Use Python 3.12 to match the official FaceFusion install guide.
+RUN conda create -y -n facefusion python=3.12 pip=25.0 \
+    && conda clean -afy
+
+RUN python - <<'PY'
+import sys
+print(sys.version)
+assert sys.version_info >= (3, 12), "FaceFusion image must use Python 3.12+"
+PY
+
+RUN python -m pip install --upgrade pip setuptools wheel
+RUN python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+RUN python -m pip install numpy onnxruntime-gpu opencv-python-headless pillow requests
 
 # FaceFusion
 WORKDIR /workspace
 RUN git clone https://github.com/facefusion/facefusion.git --depth 1
 WORKDIR /workspace/facefusion
-RUN python3 -m pip install -r requirements.txt
-RUN python3 install.py cuda --skip-conda
+RUN python -m pip install -r requirements.txt
+RUN python install.py cuda --skip-conda
 # Re-pin onnxruntime-gpu after install.py overwrites it
-RUN python3 -m pip install --force-reinstall onnxruntime-gpu
+RUN python -m pip install --force-reinstall onnxruntime-gpu
+
+RUN python - <<'PY'
+import sys
+import typing
+import onnxruntime as ort
+print("Python:", sys.version)
+print("typing.NotRequired:", typing.NotRequired)
+print("ORT:", ort.__version__)
+print("ORT providers visible at build:", ort.get_available_providers())
+PY
 
 # Models download on first pod run (avoid CI network timeouts)
 COPY entrypoint.sh /entrypoint.sh
