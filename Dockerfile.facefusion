@@ -65,9 +65,31 @@ PY
 RUN printf '%s\n' \
     '#!/usr/bin/env bash' \
     'set -euo pipefail' \
-    'exec python /workspace/facefusion/facefusion.py "$@"' \
+    'cd /workspace/facefusion' \
+    'exec python facefusion.py "$@"' \
     > /usr/local/bin/facefusion \
     && chmod +x /usr/local/bin/facefusion
+
+# Runtime model download helper. FaceFusion discovers processors from the
+# current working directory, so every CLI entry must run from repo root.
+RUN printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'set -euo pipefail' \
+    'LOG_PATH="${1:-/workspace/logs/facefusion_model_download.log}"' \
+    'mkdir -p "$(dirname "$LOG_PATH")" /workspace/facefusion/.assets/models' \
+    'cd /workspace/facefusion' \
+    'echo "[facefusion-download-models] cwd=$(pwd)" | tee "$LOG_PATH"' \
+    'echo "[facefusion-download-models] started=$(date -Iseconds)" | tee -a "$LOG_PATH"' \
+    'python facefusion.py force-download --download-scope full --download-providers github huggingface --log-level info 2>&1 | tee -a "$LOG_PATH"' \
+    'MODEL_COUNT="$(find /workspace/facefusion/.assets/models -type f | wc -l)"' \
+    'echo "[facefusion-download-models] model_file_count=${MODEL_COUNT}" | tee -a "$LOG_PATH"' \
+    'test "${MODEL_COUNT}" -gt 0' \
+    'echo "[facefusion-download-models] finished=$(date -Iseconds)" | tee -a "$LOG_PATH"' \
+    > /usr/local/bin/facefusion-download-models \
+    && chmod +x /usr/local/bin/facefusion-download-models
+
+RUN cd /tmp \
+    && facefusion headless-run --help | grep -q -- '--face-swapper-model'
 
 # GPU validation only at Pod runtime (CI has no GPU)
 # Models download on first pod run (avoid CI network timeouts)
