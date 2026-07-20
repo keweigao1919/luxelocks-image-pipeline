@@ -1,8 +1,6 @@
 #!/bin/bash
-set -e
-# RunPod compatible entrypoint
+# RunPod entrypoint: setup SSH from PUBLIC_KEY, then keep container alive
 
-# Setup SSH from PUBLIC_KEY env var
 if [ -n "$PUBLIC_KEY" ]; then
     mkdir -p /root/.ssh
     echo "$PUBLIC_KEY" > /root/.ssh/authorized_keys
@@ -11,16 +9,13 @@ if [ -n "$PUBLIC_KEY" ]; then
     echo "SSH key configured"
 fi
 
-# Start SSH daemon in foreground
-echo "Starting SSH..."
-exec /usr/sbin/sshd -D -e &
-SSHD_PID=$!
-echo "sshd started (PID=$SSHD_PID)"
+# Start SSH daemon (background, NOT with exec)
+/usr/sbin/sshd -D -e &
+echo "sshd started"
 
-# Keep container alive
+# Keep container running
 if [ $# -gt 0 ]; then
     exec "$@"
 else
-    # Default: wait for sshd
-    wait $SSHD_PID
+    tail -f /dev/null
 fi
