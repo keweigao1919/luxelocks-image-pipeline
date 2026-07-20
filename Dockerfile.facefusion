@@ -1,6 +1,6 @@
+# syntax=docker/dockerfile:1
 # veloura-facefusion-cu126-cudnn9
 # FaceFusion GPU image for RunPod Secure A6000.
-# No API keys, product images, face library, garment library, or private data.
 FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
 
 LABEL org.opencontainers.image.title="veloura-facefusion-cu126-cudnn9"
@@ -12,63 +12,28 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    ffmpeg \
-    git \
-    libgl1 \
-    libglib2.0-0 \
-    openssh-server \
-    python3 \
-    python3-pip \
-    python3-venv \
-    wget \
+    ca-certificates curl ffmpeg git libgl1 libglib2.0-0 \
+    openssh-server python3 python3-pip python3-venv wget \
     && mkdir -p /var/run/sshd \
     && sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config \
     && sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --upgrade pip setuptools wheel
+RUN python3 -m pip install numpy onnxruntime-gpu opencv-python-headless pillow requests
 
-# Keep the PyTorch wheel index scoped to torch packages only.
-RUN python3 -m pip install \
-    torch \
-    torchvision \
-    --index-url https://download.pytorch.org/whl/cu126
-
-RUN python3 -m pip install \
-    numpy \
-    onnxruntime-gpu \
-    opencv-python-headless \
-    pillow \
-    requests
-
-# Verify CUDAExecutionProvider before FaceFusion install.
-RUN python3 - <<'PY'
-import onnxruntime as ort
-providers = ort.get_available_providers()
-print("ORT version:", ort.__version__)
-print("ORT providers before FaceFusion:", providers)
-assert "CUDAExecutionProvider" in providers, "CUDA PROVIDER MISSING BEFORE FACEFUSION"
-PY
+# Verify CUDAExecutionProvider BEFORE FaceFusion (it should work with PyTorch base image)
+RUN python3 -c "import onnxruntime as ort; p=ort.get_available_providers(); print('ORT:', ort.__version__, p); assert 'CUDAExecutionProvider' in p, 'CUDA MISSING'"
 
 WORKDIR /workspace
 RUN git clone https://github.com/facefusion/facefusion.git --depth 1
 WORKDIR /workspace/facefusion
-RUN python3 -m pip install -r requirements.txt \
-    && python3 install.py cuda --skip-conda
+RUN python3 -m pip install -r requirements.txt && python3 install.py cuda --skip-conda
 
-# Verify again after install.py because it may overwrite onnxruntime-gpu.
-RUN python3 - <<'PY'
-import onnxruntime as ort
-providers = ort.get_available_providers()
-print("ORT version:", ort.__version__)
-print("ORT providers after FaceFusion:", providers)
-assert "CUDAExecutionProvider" in providers, "CUDA PROVIDER MISSING AFTER FACEFUSION"
-PY
+# Verify CUDAExecutionProvider AFTER FaceFusion (install.py may upgrade onnxruntime)
+RUN python3 -c "import onnxruntime as ort; p=ort.get_available_providers(); print('ORT:', ort.__version__, p); assert 'CUDAExecutionProvider' in p, 'CUDA LOST AFTER FACEFUSION'"
 
-# Cache FaceFusion models in the image. Keep full output so failures fail visibly.
+# Pre-download all FaceFusion models
 RUN python3 facefusion.py force-download
 
 COPY entrypoint.sh /entrypoint.sh
