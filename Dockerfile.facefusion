@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # veloura-facefusion-cu126-cudnn9
 # FaceFusion GPU image for RunPod Secure A6000.
-FROM pytorch/pytorch:2.9.1-cuda12.6-cudnn9-runtime
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 
 LABEL org.opencontainers.image.title="veloura-facefusion-cu126-cudnn9"
 LABEL org.opencontainers.image.description="FaceFusion GPU face swap for LuxeLocks pipeline"
@@ -48,8 +48,8 @@ WORKDIR /workspace/facefusion
 RUN python -m pip install -r requirements.txt
 RUN python install.py cuda --skip-conda
 # Re-pin onnxruntime-gpu after install.py overwrites it.
-# Pin CUDA 12.x compatible version (latest ORT requires CUDA 13).
-RUN python -m pip install --force-reinstall onnxruntime-gpu==1.18.0
+# ORT 1.17.1 is the last version compatible with cuDNN 8 (PyTorch 2.1.0 base).
+RUN python -m pip install --force-reinstall onnxruntime-gpu==1.17.1 "numpy<2"
 
 # GPU validation only at Pod runtime (CI has no GPU)
 # Models download on first pod run (avoid CI network timeouts)
