@@ -1,40 +1,69 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# RunPod entrypoint: setup SSH from RunPod key env vars, then keep container alive.
-# RunPod templates may expose either PUBLIC_KEY or SSH_PUBLIC_KEY depending on
-# connection mode/template path, so support both.
+# RunPod-compatible Pod entrypoint.
+# From a non-RunPod base image we must reproduce the SSH setup inherited by
+# runpod/base: key injection, host keys, sshd startup, then keep the container up.
 
-mkdir -p /root/.ssh
-touch /root/.ssh/authorized_keys
+log() {
+    printf '[entrypoint] %s\n' "$*"
+}
 
-if [ -n "${PUBLIC_KEY:-}" ]; then
-    echo "$PUBLIC_KEY" >> /root/.ssh/authorized_keys
-fi
+append_key_var() {
+    local value="${1:-}"
+    if [ -n "$value" ]; then
+        # Support both real newlines and escaped "\n" sequences, and strip CRLF.
+        printf '%b\n' "$value" | tr -d '\r' >> /root/.ssh/authorized_keys
+    fi
+}
 
-if [ -n "${SSH_PUBLIC_KEY:-}" ]; then
-    echo "$SSH_PUBLIC_KEY" >> /root/.ssh/authorized_keys
-fi
+mkdir -p /root/.ssh /run/sshd /var/run/sshd
+chmod 700 /root/.ssh
+: > /root/.ssh/authorized_keys
+
+append_key_var "${PUBLIC_KEY:-}"
+append_key_var "${SSH_PUBLIC_KEY:-}"
+append_key_var "${RUNPOD_PUBLIC_KEY:-}"
 
 if [ -s /root/.ssh/authorized_keys ]; then
-    mkdir -p /root/.ssh
-    chmod 700 /root/.ssh
+    sort -u /root/.ssh/authorized_keys -o /root/.ssh/authorized_keys
     chmod 600 /root/.ssh/authorized_keys
-    echo "SSH authorized_keys configured"
+    log "SSH authorized_keys configured"
 else
-    echo "WARNING: no PUBLIC_KEY or SSH_PUBLIC_KEY provided"
+    log "WARNING: no PUBLIC_KEY, SSH_PUBLIC_KEY, or RUNPOD_PUBLIC_KEY provided"
 fi
 
-# Ensure host keys exist even when the base image did not generate them.
 ssh-keygen -A
 
-# Start SSH daemon in background so an optional command can still run.
-/usr/sbin/sshd -D -e &
-echo "sshd started"
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/99-runpod.conf <<'EOF'
+Port 22
+PermitRootLogin yes
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+X11Forwarding no
+AllowTcpForwarding yes
+GatewayPorts yes
+EOF
 
-# Keep container running
-if [ $# -gt 0 ]; then
-    exec "$@"
-else
-    tail -f /dev/null
+# Run sshd as a daemon. If startup fails, fail the container early.
+/usr/sbin/sshd -e
+log "sshd started"
+
+if command -v python >/dev/null 2>&1; then
+    log "python=$(python --version 2>&1)"
 fi
+
+if command -v nvidia-smi >/dev/null 2>&1; then
+    log "nvidia-smi available"
+fi
+
+if [ "$#" -gt 0 ]; then
+    exec "$@"
+fi
+
+tail -f /dev/null
