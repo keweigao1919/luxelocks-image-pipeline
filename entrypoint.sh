@@ -9,6 +9,27 @@ log() {
     printf '[entrypoint] %s\n' "$*"
 }
 
+export PATH="/opt/conda/envs/facefusion/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
+mkdir -p /etc/profile.d
+cat > /etc/profile.d/facefusion.sh <<'EOF'
+export PATH=/opt/conda/envs/facefusion/bin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+EOF
+chmod 644 /etc/profile.d/facefusion.sh
+
+touch /root/.bashrc
+if ! grep -q 'facefusion/bin' /root/.bashrc; then
+    printf '\n# FaceFusion runtime path\nsource /etc/profile.d/facefusion.sh\n' >> /root/.bashrc
+fi
+
+if [ -x /opt/conda/envs/facefusion/bin/python ] && [ ! -e /usr/local/bin/python ]; then
+    ln -s /opt/conda/envs/facefusion/bin/python /usr/local/bin/python
+fi
+
+if [ -x /opt/conda/envs/facefusion/bin/pip ] && [ ! -e /usr/local/bin/pip ]; then
+    ln -s /opt/conda/envs/facefusion/bin/pip /usr/local/bin/pip
+fi
+
 append_key_var() {
     local value="${1:-}"
     if [ -n "$value" ]; then

@@ -22,6 +22,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN conda create -y -n facefusion python=3.12 pip=25.0 \
     && conda clean -afy
 
+# Make the facefusion Python visible in SSH login and non-login sessions.
+# SSHD can reset PATH, so rely on both profile.d and /usr/local/bin shims.
+RUN printf '%s\n' \
+    'export PATH=/opt/conda/envs/facefusion/bin:/opt/conda/bin:$PATH' \
+    > /etc/profile.d/facefusion.sh \
+    && chmod 644 /etc/profile.d/facefusion.sh \
+    && ln -sf /opt/conda/envs/facefusion/bin/python /usr/local/bin/python \
+    && ln -sf /opt/conda/envs/facefusion/bin/pip /usr/local/bin/pip
+
 RUN python - <<'PY'
 import sys
 print(sys.version)
