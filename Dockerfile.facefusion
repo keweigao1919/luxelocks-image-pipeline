@@ -89,11 +89,14 @@ RUN mkdir -p ckpts models
 
 RUN /opt/conda/bin/pip install -r requirements.txt -q
 
-# Leffa models: VT + SCHP + OpenPose
+# Leffa models: VT + SCHP + OpenPose (with retry for network flakiness)
 RUN mkdir -p ckpts/schp ckpts/openpose \
-    && wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/virtual_tryon.pth -O models/virtual_tryon.pth \
-    && wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/schp.pth -O ckpts/schp/schp.pth \
-    && wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/body_pose_model.pth -O ckpts/openpose/body_pose_model.pth
+    && wget --retry-connrefused --tries=5 --timeout=30 --progress=dot:giga \
+        https://huggingface.co/franciszzj/Leffa/resolve/main/virtual_tryon.pth -O models/virtual_tryon.pth \
+    && wget --retry-connrefused --tries=5 --timeout=30 \
+        https://huggingface.co/franciszzj/Leffa/resolve/main/schp.pth -O ckpts/schp/schp.pth \
+    && wget --retry-connrefused --tries=5 --timeout=30 \
+        https://huggingface.co/franciszzj/Leffa/resolve/main/body_pose_model.pth -O ckpts/openpose/body_pose_model.pth
 
 # SD Inpainting (~5GB) — Leffa VTON + Body Completion
 RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionInpaintPipeline; import torch; p=StableDiffusionInpaintPipeline.from_pretrained('runwayml/stable-diffusion-inpainting',torch_dtype=torch.float16,variant='fp16'); p.save_pretrained('./ckpts/stable-diffusion-inpainting'); print('SD Inpainting OK')"
