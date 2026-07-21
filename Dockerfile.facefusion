@@ -29,9 +29,10 @@ RUN /opt/conda/bin/pip install "numpy<2" diffusers transformers accelerate \
     insightface onnxruntime-gpu -q
 
 # ═══════════════════════════════════════════════════════
-# detectron2 - needs setuptools<60 (pkg_resources), non-editable install
+# detectron2 - needs setuptools<60, deps installed manually
 WORKDIR /workspace
 RUN /opt/conda/bin/pip install "setuptools<60" -q \
+    && /opt/conda/bin/pip install fvcore iopath pycocotools termcolor yacs tabulate cloudpickle omegaconf hydra-core -q \
     && git clone https://github.com/facebookresearch/detectron2.git --depth 1 \
     && cd detectron2 \
     && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/pip install . --no-deps --no-build-isolation \
