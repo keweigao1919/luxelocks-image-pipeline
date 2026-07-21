@@ -29,12 +29,13 @@ RUN /opt/conda/bin/pip install diffusers transformers accelerate \
     insightface onnxruntime-gpu -q
 
 # ═══════════════════════════════════════════════════════
-# detectron2 - remove pyproject.toml to force legacy setup.py
+# detectron2 - use pip 21.3.1 (legacy build system, compatible with setup.py)
 WORKDIR /workspace
-RUN git clone https://github.com/facebookresearch/detectron2.git --depth 1 \
+RUN /opt/conda/bin/pip install pip==21.3.1 -q \
+    && git clone https://github.com/facebookresearch/detectron2.git --depth 1 \
     && cd detectron2 \
-    && rm -f pyproject.toml \
-    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/pip install -e . --no-build-isolation \
+    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/pip install -e . \
+    && /opt/conda/bin/pip install --upgrade pip -q \
     && /opt/conda/bin/python -c "import detectron2; print('detectron2 OK')"
 
 # ═══════════════════════════════════════════════════════
