@@ -89,14 +89,9 @@ RUN mkdir -p ckpts models
 
 RUN /opt/conda/bin/pip install -r requirements.txt -q
 
-# Leffa models: VT + SCHP + OpenPose (with retry for network flakiness)
+# Leffa models: VT + SCHP + OpenPose (Python download, handles HF retry)
 RUN mkdir -p ckpts/schp ckpts/openpose \
-    && wget --retry-connrefused --tries=5 --timeout=30 --progress=dot:giga \
-        https://huggingface.co/franciszzj/Leffa/resolve/main/virtual_tryon.pth -O models/virtual_tryon.pth \
-    && wget --retry-connrefused --tries=5 --timeout=30 \
-        https://huggingface.co/franciszzj/Leffa/resolve/main/schp.pth -O ckpts/schp/schp.pth \
-    && wget --retry-connrefused --tries=5 --timeout=30 \
-        https://huggingface.co/franciszzj/Leffa/resolve/main/body_pose_model.pth -O ckpts/openpose/body_pose_model.pth
+    && /opt/conda/bin/python -c "from huggingface_hub import hf_hub_download; hf_hub_download('franciszzj/Leffa','virtual_tryon.pth',local_dir='./models'); hf_hub_download('franciszzj/Leffa','schp.pth',local_dir='./ckpts/schp'); hf_hub_download('franciszzj/Leffa','body_pose_model.pth',local_dir='./ckpts/openpose'); print('Leffa models OK')"
 
 # SD Inpainting (~5GB) — Leffa VTON + Body Completion
 RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionInpaintPipeline; import torch; p=StableDiffusionInpaintPipeline.from_pretrained('runwayml/stable-diffusion-inpainting',torch_dtype=torch.float16,variant='fp16'); p.save_pretrained('./ckpts/stable-diffusion-inpainting'); print('SD Inpainting OK')"
@@ -110,12 +105,7 @@ WORKDIR /workspace/InstantID
 RUN mkdir -p checkpoints/ControlNetModel models/antelopev2
 
 # InstantID ControlNet + IP-Adapter
-RUN wget -q https://huggingface.co/InstantX/InstantID/resolve/main/ControlNetModel/diffusion_pytorch_model.safetensors \
-        -O checkpoints/ControlNetModel/diffusion_pytorch_model.safetensors \
-    && wget -q https://huggingface.co/InstantX/InstantID/resolve/main/ControlNetModel/config.json \
-        -O checkpoints/ControlNetModel/config.json \
-    && wget -q https://huggingface.co/InstantX/InstantID/resolve/main/ip-adapter.bin \
-        -O checkpoints/ip-adapter.bin
+RUN /opt/conda/bin/python -c "import os; os.makedirs('checkpoints/ControlNetModel',exist_ok=True); from huggingface_hub import hf_hub_download; hf_hub_download('InstantX/InstantID','ControlNetModel/config.json',local_dir='./checkpoints'); hf_hub_download('InstantX/InstantID','ControlNetModel/diffusion_pytorch_model.safetensors',local_dir='./checkpoints'); hf_hub_download('InstantX/InstantID','ip-adapter.bin',local_dir='./checkpoints'); print('InstantID models OK')"
 
 # SDXL base model (~7GB) — YamerMIX_v8 for best portrait quality
 RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionXLInstantIDPipeline; import torch; p=StableDiffusionXLInstantIDPipeline.from_pretrained('wangqixun/YamerMIX_v8',torch_dtype=torch.float16); p.save_pretrained('./checkpoints/YamerMIX_v8'); print('SDXL OK')"
