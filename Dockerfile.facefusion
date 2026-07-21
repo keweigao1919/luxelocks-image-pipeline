@@ -8,7 +8,7 @@ LABEL org.opencontainers.image.description="InstantID + Leffa + SD Inpainting �
 
 ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 \
     PATH=/opt/conda/envs/facefusion/bin:/opt/conda/bin:$PATH \
-    PYTHONPATH="/workspace/Leffa:/workspace/InstantID:/workspace/detectron2"
+    PYTHONPATH="/workspace/Leffa:/workspace/InstantID"
 
 # ═══════════════════════════════════════════════════════
 # System deps
@@ -29,12 +29,13 @@ RUN /opt/conda/bin/pip install diffusers transformers accelerate \
     insightface onnxruntime-gpu -q
 
 # ═══════════════════════════════════════════════════════
-# detectron2 - needs setuptools<60 (pkg_resources), skip deps install
+# detectron2 - needs setuptools<60 (pkg_resources), non-editable install
 WORKDIR /workspace
 RUN /opt/conda/bin/pip install "setuptools<60" -q \
     && git clone https://github.com/facebookresearch/detectron2.git --depth 1 \
     && cd detectron2 \
-    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/pip install -e . --no-deps --no-build-isolation \
+    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/pip install . --no-deps --no-build-isolation \
+    && cd / && rm -rf /workspace/detectron2 \
     && /opt/conda/bin/pip install --upgrade setuptools -q \
     && /opt/conda/bin/python -c "import detectron2; print('detectron2 OK')"
 
