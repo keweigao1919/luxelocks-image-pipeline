@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Base Python 3.10: Leffa + InstantID
 # ═══════════════════════════════════════════════════════
 RUN /opt/conda/bin/pip install --upgrade pip setuptools wheel -q
-RUN /opt/conda/bin/pip install diffusers transformers accelerate \
+RUN /opt/conda/bin/pip install "numpy<2" diffusers transformers accelerate \
     opencv-python-headless pillow einops scipy imageio tqdm \
     insightface onnxruntime-gpu -q
 
