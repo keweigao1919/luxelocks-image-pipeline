@@ -10,7 +10,7 @@ LABEL org.opencontainers.image.description="FaceFusion + Leffa + InstantID + Bod
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH="/workspace/Leffa:/workspace/InstantID:${PYTHONPATH}"
+    PYTHONPATH="/workspace/Leffa:/workspace/InstantID"
 
 # ================================================================
 # System deps
