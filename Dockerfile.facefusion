@@ -89,9 +89,8 @@ RUN mkdir -p ckpts models
 
 RUN /opt/conda/bin/pip install -r requirements.txt -q
 
-# Leffa models: VT + SCHP + OpenPose (Python download, handles HF retry)
-RUN mkdir -p ckpts/schp ckpts/openpose \
-    && /opt/conda/bin/python -c "from huggingface_hub import hf_hub_download; hf_hub_download('franciszzj/Leffa','virtual_tryon.pth',local_dir='./models'); hf_hub_download('franciszzj/Leffa','schp.pth',local_dir='./ckpts/schp'); hf_hub_download('franciszzj/Leffa','body_pose_model.pth',local_dir='./ckpts/openpose'); print('Leffa models OK')"
+# Leffa models - use snapshot_download (same as Leffa's app.py)
+RUN /opt/conda/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download('franciszzj/Leffa',local_dir='./ckpts',allow_patterns=['*.pth','*.onnx','*.pkl','*.yaml','*.json','*.txt'],ignore_patterns=['*pose_transfer*']); print('Leffa models OK')"
 
 # SD Inpainting (~5GB) — Leffa VTON + Body Completion
 RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionInpaintPipeline; import torch; p=StableDiffusionInpaintPipeline.from_pretrained('runwayml/stable-diffusion-inpainting',torch_dtype=torch.float16,variant='fp16'); p.save_pretrained('./ckpts/stable-diffusion-inpainting'); print('SD Inpainting OK')"
