@@ -110,8 +110,12 @@ RUN /opt/conda/bin/python -c "import os; os.makedirs('checkpoints/ControlNetMode
 # SDXL base model (~7GB) — download files only (no model load, saves RAM)
 RUN /opt/conda/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download('wangqixun/YamerMIX_v8',local_dir='./checkpoints/YamerMIX_v8'); print('SDXL OK')"
 
-# InsightFace antelopev2 for face detection
-RUN /opt/conda/bin/python -c "from insightface.app import FaceAnalysis; app=FaceAnalysis(name='antelopev2',root='./models',providers=['CPUExecutionProvider']); app.prepare(ctx_id=-1); print('InsightFace OK')"
+# InsightFace antelopev2 for InstantID face detection
+RUN mkdir -p models/antelopev2 \
+    && cd models/antelopev2 \
+    && wget --retry-connrefused --tries=5 https://github.com/deepinsight/insightface/releases/download/v0.7/antelopev2.zip \
+    && /opt/conda/bin/python -c "import zipfile; zipfile.ZipFile('antelopev2.zip').extractall('.'); print('InsightFace OK')" \
+    && rm antelopev2.zip
 
 # ═══════════════════════════════════════════════════════
 # Entrypoint
