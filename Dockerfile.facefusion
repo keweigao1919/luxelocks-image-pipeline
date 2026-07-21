@@ -29,13 +29,13 @@ RUN /opt/conda/bin/pip install diffusers transformers accelerate \
     insightface onnxruntime-gpu -q
 
 # ═══════════════════════════════════════════════════════
-# detectron2 - use pip 21.3.1 (legacy build system) + ensure setuptools
+# detectron2 - needs setuptools<60 (pkg_resources removed in 60+)
 WORKDIR /workspace
-RUN /opt/conda/bin/pip install setuptools pip==21.3.1 -q \
+RUN /opt/conda/bin/pip install "setuptools<60" -q \
     && git clone https://github.com/facebookresearch/detectron2.git --depth 1 \
     && cd detectron2 \
-    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/pip install -e . \
-    && /opt/conda/bin/pip install --upgrade setuptools pip -q \
+    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/python setup.py build develop \
+    && /opt/conda/bin/pip install --upgrade setuptools -q \
     && /opt/conda/bin/python -c "import detectron2; print('detectron2 OK')"
 
 # ═══════════════════════════════════════════════════════
