@@ -1,20 +1,18 @@
 # syntax=docker/dockerfile:1
-# All-in-one GPU pipeline: FaceFusion + Leffa VTON + InstantID
-# Strategy: two Python environments
-#   - Base conda (Python 3.10): Leffa + detectron2 + InstantID
-#   - Conda env facefusion (Python 3.12): FaceFusion only
+# ULTIMATE GPU Pipeline: InstantID + Leffa + SD Inpainting
+# All models baked in. Pod starts → run immediately. No downloads.
 FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
 
-LABEL org.opencontainers.image.title="veloura-facefusion-cu126-cudnn9"
-LABEL org.opencontainers.image.description="FaceFusion + Leffa + InstantID + Body Completion"
+LABEL org.opencontainers.image.title="luxelocks-ultimate"
+LABEL org.opencontainers.image.description="InstantID + Leffa + SD Inpainting — all models baked"
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONUNBUFFERED=1 \
+ENV DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 \
+    PATH=/opt/conda/envs/facefusion/bin:/opt/conda/bin:$PATH \
     PYTHONPATH="/workspace/Leffa:/workspace/InstantID"
 
-# ================================================================
+# ═══════════════════════════════════════════════════════
 # System deps
-# ================================================================
+# ═══════════════════════════════════════════════════════
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential curl ffmpeg git libgl1 libglib2.0-0 libgl1-mesa-glx \
     openssh-server wget \
@@ -22,33 +20,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ================================================================
-# Base Python 3.10 (system conda): Leffa + InstantID + detectron2
-# ================================================================
-# /opt/conda/bin/python is Python 3.10 with PyTorch 2.1.0
+# ═══════════════════════════════════════════════════════
+# Base Python 3.10: Leffa + InstantID
+# ═══════════════════════════════════════════════════════
+RUN /opt/conda/bin/pip install --upgrade pip setuptools wheel -q
+RUN /opt/conda/bin/pip install diffusers transformers accelerate \
+    opencv-python-headless pillow einops scipy imageio tqdm \
+    insightface onnxruntime-gpu -q
 
-# detectron2 (required by Leffa) - build from source for Python 3.10
+# ═══════════════════════════════════════════════════════
+# detectron2 for Leffa (build from source for Python 3.10)
+# ═══════════════════════════════════════════════════════
 RUN git clone https://github.com/facebookresearch/detectron2.git /tmp/d2 --depth 1 \
     && cd /tmp/d2 \
-    && /opt/conda/bin/python -m pip install . -q \
+    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/python -m pip install . -q \
     && cd / && rm -rf /tmp/d2 \
     && /opt/conda/bin/python -c "import detectron2; print('detectron2 OK')"
 
-# Leffa base deps (diffusers, transformers, etc.)
-RUN /opt/conda/bin/pip install --upgrade pip setuptools wheel -q
-RUN /opt/conda/bin/pip install diffusers transformers accelerate \
-    opencv-python-headless pillow einops scipy imageio tqdm -q
-
-# ================================================================
+# ═══════════════════════════════════════════════════════
 # FaceFusion conda env (Python 3.12)
-# ================================================================
+# ═══════════════════════════════════════════════════════
 RUN conda create -y -n facefusion python=3.12 pip=25.0 && conda clean -afy
 
-# Make facefusion env the default for CLI
 RUN printf '%s\n' \
     'export PATH=/opt/conda/envs/facefusion/bin:/opt/conda/bin:$PATH' \
-    > /etc/profile.d/facefusion.sh \
-    && chmod 644 /etc/profile.d/facefusion.sh \
+    > /etc/profile.d/facefusion.sh && chmod 644 /etc/profile.d/facefusion.sh \
     && ln -sf /opt/conda/envs/facefusion/bin/python /usr/local/bin/python \
     && ln -sf /opt/conda/envs/facefusion/bin/pip /usr/local/bin/pip
 
@@ -56,7 +52,6 @@ RUN python -m pip install --upgrade pip setuptools wheel
 RUN python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 RUN python -m pip install numpy onnxruntime-gpu opencv-python-headless pillow requests
 
-# FaceFusion code + models
 WORKDIR /workspace
 RUN git clone https://github.com/facefusion/facefusion.git --depth 1
 WORKDIR /workspace/facefusion
@@ -67,79 +62,65 @@ RUN python -m pip install --force-reinstall onnxruntime-gpu==1.17.1 "numpy<2"
 COPY scripts/facefusion_download_required_models.py /usr/local/bin/facefusion-download-required-models
 RUN chmod +x /usr/local/bin/facefusion-download-required-models
 
-# facefusion CLI wrapper (uses conda env Python 3.12)
 RUN printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'set -euo pipefail' \
-    'cd /workspace/facefusion' \
-    'exec python facefusion.py "$@"' \
+    '#!/usr/bin/env bash' 'set -euo pipefail' \
+    'cd /workspace/facefusion' 'exec python facefusion.py "$@"' \
     > /usr/local/bin/facefusion && chmod +x /usr/local/bin/facefusion
 
-# Pre-download all FaceFusion models
 RUN printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'set -euo pipefail' \
+    '#!/usr/bin/env bash' 'set -euo pipefail' \
     'cd /workspace/facefusion' \
     'exec python /usr/local/bin/facefusion-download-required-models' \
     > /usr/local/bin/facefusion-download-models && chmod +x /usr/local/bin/facefusion-download-models
+
+# Bake FaceFusion models
 RUN facefusion-download-required-models
 
-# ================================================================
+# ═══════════════════════════════════════════════════════
 # Leffa: Virtual Try-On (CVPR 2025)
-# ================================================================
+# ═══════════════════════════════════════════════════════
 WORKDIR /workspace
 RUN git clone https://github.com/franciszzj/Leffa.git --depth 1
 WORKDIR /workspace/Leffa
 RUN mkdir -p ckpts models
 
-# Leffa Python deps (for system Python 3.10)
 RUN /opt/conda/bin/pip install -r requirements.txt -q
 
-# Leffa VT model (~2GB)
-RUN wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/virtual_tryon.pth \
-    -O /workspace/Leffa/models/virtual_tryon.pth
-
-# Leffa preprocessing models (SCHP + OpenPose)
+# Leffa models: VT + SCHP + OpenPose
 RUN mkdir -p ckpts/schp ckpts/openpose \
-    && wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/schp.pth \
-        -O ckpts/schp/schp.pth \
-    && wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/body_pose_model.pth \
-        -O ckpts/openpose/body_pose_model.pth
+    && wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/virtual_tryon.pth -O models/virtual_tryon.pth \
+    && wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/schp.pth -O ckpts/schp/schp.pth \
+    && wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/body_pose_model.pth -O ckpts/openpose/body_pose_model.pth
 
-# SD Inpainting (~5GB) - for Leffa + body completion
-RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionInpaintPipeline; import torch; p = StableDiffusionInpaintPipeline.from_pretrained('runwayml/stable-diffusion-inpainting', torch_dtype=torch.float16, variant='fp16'); p.save_pretrained('./ckpts/stable-diffusion-inpainting'); print('SD Inpainting OK')"
+# SD Inpainting (~5GB) — Leffa VTON + Body Completion
+RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionInpaintPipeline; import torch; p=StableDiffusionInpaintPipeline.from_pretrained('runwayml/stable-diffusion-inpainting',torch_dtype=torch.float16,variant='fp16'); p.save_pretrained('./ckpts/stable-diffusion-inpainting'); print('SD Inpainting OK')"
 
-# ================================================================
+# ═══════════════════════════════════════════════════════
 # InstantID: Diffusion Face Swap (SOTA, 87% fidelity)
-# ================================================================
+# ═══════════════════════════════════════════════════════
 WORKDIR /workspace
 RUN git clone https://github.com/InstantID/InstantID.git --depth 1
 WORKDIR /workspace/InstantID
-RUN mkdir -p checkpoints models/antelopev2
+RUN mkdir -p checkpoints/ControlNetModel models/antelopev2
 
-# InstantID deps
-RUN /opt/conda/bin/pip install insightface -q 2>&1 | tail -1 || true
-
-# InstantID ControlNet (~1.5GB) + IP-Adapter (~600MB)
-RUN mkdir -p checkpoints/ControlNetModel \
-    && wget -q https://huggingface.co/InstantX/InstantID/resolve/main/ControlNetModel/diffusion_pytorch_model.safetensors \
+# InstantID ControlNet + IP-Adapter
+RUN wget -q https://huggingface.co/InstantX/InstantID/resolve/main/ControlNetModel/diffusion_pytorch_model.safetensors \
         -O checkpoints/ControlNetModel/diffusion_pytorch_model.safetensors \
     && wget -q https://huggingface.co/InstantX/InstantID/resolve/main/ControlNetModel/config.json \
         -O checkpoints/ControlNetModel/config.json \
     && wget -q https://huggingface.co/InstantX/InstantID/resolve/main/ip-adapter.bin \
         -O checkpoints/ip-adapter.bin
 
-# SDXL base model (~7GB)
-RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionXLInstantIDPipeline; import torch; p = StableDiffusionXLInstantIDPipeline.from_pretrained('wangqixun/YamerMIX_v8', torch_dtype=torch.float16); p.save_pretrained('./checkpoints/YamerMIX_v8'); print('SDXL OK')"
+# SDXL base model (~7GB) — YamerMIX_v8 for best portrait quality
+RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionXLInstantIDPipeline; import torch; p=StableDiffusionXLInstantIDPipeline.from_pretrained('wangqixun/YamerMIX_v8',torch_dtype=torch.float16); p.save_pretrained('./checkpoints/YamerMIX_v8'); print('SDXL OK')"
 
-# InsightFace antelopev2 (face detection for InstantID)
-RUN /opt/conda/bin/python -c "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='antelopev2', root='./models', providers=['CPUExecutionProvider']); app.prepare(ctx_id=-1); print('InsightFace OK')"
+# InsightFace antelopev2 for face detection
+RUN /opt/conda/bin/python -c "from insightface.app import FaceAnalysis; app=FaceAnalysis(name='antelopev2',root='./models',providers=['CPUExecutionProvider']); app.prepare(ctx_id=-1); print('InsightFace OK')"
 
-WORKDIR /workspace
-
-# ================================================================
+# ═══════════════════════════════════════════════════════
 # Entrypoint
-# ================================================================
+# ═══════════════════════════════════════════════════════
+WORKDIR /workspace
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
