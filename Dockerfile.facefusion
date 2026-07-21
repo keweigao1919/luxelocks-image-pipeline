@@ -101,23 +101,14 @@ RUN facefusion-download-required-models
 # ═══ Leffa: Virtual Try-On + Body Generation (CVPR 2025) ═══
 ENV PYTHONPATH="/workspace/Leffa:${PYTHONPATH}"
 
-# Leffa: Virtual Try-On (CVPR 2025) — code + models only (deps at runtime)
+# Leffa: Virtual Try-On (CVPR 2025) — code + VT model
 RUN mkdir -p /workspace && cd /workspace \
     && git clone https://github.com/franciszzj/Leffa.git --depth 1 \
-    && cd Leffa \
-    && mkdir -p ckpts models
+    && cd Leffa && mkdir -p ckpts models
 
-# Leffa VT checkpoint (~2GB)
+# Leffa VT model (~2GB)
 RUN wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/virtual_tryon.pth \
     -O /workspace/Leffa/models/virtual_tryon.pth
-
-# SD Inpainting base model (~5GB)
-RUN python - <<PY
-from diffusers import StableDiffusionInpaintPipeline
-import torch
-p = StableDiffusionInpaintPipeline.from_pretrained("runwayml/stable-diffusion-inpainting", torch_dtype=torch.float16)
-p.save_pretrained("/workspace/Leffa/ckpts/stable-diffusion-inpainting")
-PY
 
 # GPU validation only at Pod runtime (CI has no GPU).
 # FaceFusion model files are baked during image build above.
