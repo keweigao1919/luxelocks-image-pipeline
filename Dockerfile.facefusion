@@ -107,8 +107,8 @@ RUN mkdir -p checkpoints/ControlNetModel models/antelopev2
 # InstantID ControlNet + IP-Adapter
 RUN /opt/conda/bin/python -c "import os; os.makedirs('checkpoints/ControlNetModel',exist_ok=True); from huggingface_hub import hf_hub_download; hf_hub_download('InstantX/InstantID','ControlNetModel/config.json',local_dir='./checkpoints'); hf_hub_download('InstantX/InstantID','ControlNetModel/diffusion_pytorch_model.safetensors',local_dir='./checkpoints'); hf_hub_download('InstantX/InstantID','ip-adapter.bin',local_dir='./checkpoints'); print('InstantID models OK')"
 
-# SDXL base model (~7GB) — YamerMIX_v8 for best portrait quality
-RUN /opt/conda/bin/python -c "from diffusers import StableDiffusionXLInstantIDPipeline; import torch; p=StableDiffusionXLInstantIDPipeline.from_pretrained('wangqixun/YamerMIX_v8',torch_dtype=torch.float16); p.save_pretrained('./checkpoints/YamerMIX_v8'); print('SDXL OK')"
+# SDXL base model (~7GB) — download files only (no model load, saves RAM)
+RUN /opt/conda/bin/python -c "from huggingface_hub import snapshot_download; snapshot_download('wangqixun/YamerMIX_v8',local_dir='./checkpoints/YamerMIX_v8'); print('SDXL OK')"
 
 # InsightFace antelopev2 for face detection
 RUN /opt/conda/bin/python -c "from insightface.app import FaceAnalysis; app=FaceAnalysis(name='antelopev2',root='./models',providers=['CPUExecutionProvider']); app.prepare(ctx_id=-1); print('InsightFace OK')"
