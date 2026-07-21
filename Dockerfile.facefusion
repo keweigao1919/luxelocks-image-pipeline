@@ -29,10 +29,10 @@ RUN /opt/conda/bin/pip install diffusers transformers accelerate \
     insightface onnxruntime-gpu -q
 
 # ═══════════════════════════════════════════════════════
-# detectron2 for Leffa (build from source)
-RUN git clone https://github.com/facebookresearch/detectron2.git /tmp/d2 \
+# detectron2 for Leffa — force legacy setup.py install path
+RUN git clone https://github.com/facebookresearch/detectron2.git /tmp/d2 --depth 1 \
     && cd /tmp/d2 \
-    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/python -m pip install --no-build-isolation . 2>/tmp/d2_build.log || { tail -50 /tmp/d2_build.log; exit 1; } \
+    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/pip install --no-build-isolation --no-use-pep517 . \
     && cd / && rm -rf /tmp/d2 \
     && /opt/conda/bin/python -c "import detectron2; print('detectron2 OK')"
 
