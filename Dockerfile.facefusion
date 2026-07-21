@@ -98,6 +98,29 @@ RUN cd /tmp \
 # failure-prone network step out of paid RunPod time.
 RUN facefusion-download-required-models
 
+# ═══ Leffa: Virtual Try-On + Body Generation (CVPR 2025) ═══
+ENV PYTHONPATH="/workspace/Leffa:${PYTHONPATH}"
+
+# Leffa: Virtual Try-On (CVPR 2025)
+RUN pip install detectron2 -f https://dl.fbaipublicfiles.com/detectron2/wheels/cu121/torch2.1/index.html -q
+RUN cd /workspace && git clone https://github.com/franciszzj/Leffa.git --depth 1
+RUN cd /workspace/Leffa && pip install -r requirements.txt -q
+RUN mkdir -p /workspace/Leffa/ckpts /workspace/Leffa/models
+
+RUN wget -q https://huggingface.co/franciszzj/Leffa/resolve/main/virtual_tryon.pth -O /workspace/Leffa/models/virtual_tryon.pth
+
+RUN python - <<PY
+from diffusers import StableDiffusionInpaintPipeline
+import torch
+p = StableDiffusionInpaintPipeline.from_pretrained("runwayml/stable-diffusion-inpainting", torch_dtype=torch.float16)
+p.save_pretrained("/workspace/Leffa/ckpts/stable-diffusion-inpainting")
+PY
+
+ENV PYTHONPATH="/workspace/Leffa:${PYTHONPATH}"
+
+# Smoke test
+RUN cd /workspace/Leffa && python -c "from leffa.model import LeffaModel; from leffa.inference import LeffaInference; from leffa.transform import LeffaTransform; print('Leffa OK')"
+
 # GPU validation only at Pod runtime (CI has no GPU).
 # FaceFusion model files are baked during image build above.
 COPY entrypoint.sh /entrypoint.sh
