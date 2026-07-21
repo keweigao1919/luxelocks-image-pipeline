@@ -33,7 +33,7 @@ RUN /opt/conda/bin/pip install diffusers transformers accelerate \
 # ═══════════════════════════════════════════════════════
 RUN git clone https://github.com/facebookresearch/detectron2.git /tmp/d2 --depth 1 \
     && cd /tmp/d2 \
-    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/python -m pip install . -q \
+    && TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" /opt/conda/bin/python -m pip install . --no-build-isolation -q \
     && cd / && rm -rf /tmp/d2 \
     && /opt/conda/bin/python -c "import detectron2; print('detectron2 OK')"
 
